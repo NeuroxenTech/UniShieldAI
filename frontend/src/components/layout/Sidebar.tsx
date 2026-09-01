@@ -9,9 +9,9 @@ import {
   FileText,
   Settings,
   HelpCircle,
-  Shield,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
+import { Logo } from "../brand/Logo";
 
 const navItems = [
   { label: "Dashboard", path: "/", icon: LayoutGrid },
@@ -101,9 +101,7 @@ export function Sidebar() {
     <aside className="fixed z-40 bottom-0 inset-x-0 h-14 md:h-full md:inset-y-0 md:left-0 md:w-16 flex items-center md:items-stretch md:flex-col px-2 md:px-0 md:py-4 bg-[#0B0B17]/95 md:bg-[#0B0B17] backdrop-blur-xl border-t md:border-t-0 md:border-r border-white/[0.06]">
       {/* Logo (desktop only) */}
       <div className="hidden md:block mb-6">
-        <div className="w-8 h-8 rounded-xl accent-gradient glow-violet flex items-center justify-center">
-          <Shield size={16} className="text-white" strokeWidth={2} />
-        </div>
+        <Logo />
       </div>
 
       {/* Primary nav — row on mobile, column on desktop */}
