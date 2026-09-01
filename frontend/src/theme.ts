@@ -33,3 +33,21 @@ export const severity = {
 } as const;
 
 export type SeverityKey = keyof typeof severity;
+
+// SOC Command Center palette (violet glassmorphic identity).
+export const soc = {
+  page: "#0a0a14",
+  sidebar: "#0b0b17",
+  accent: "#7C5CFC",
+  accent2: "#A78BFA",
+  glass: "rgba(255,255,255,0.03)",
+  glassBorder: "rgba(255,255,255,0.06)",
+  risk: {
+    critical: "#FF4757",
+    high: "#FF9F43",
+    medium: "#FFD93D",
+    low: "#6BCB77",
+  } as const,
+} as const;
+
+export type RiskLevel = keyof typeof soc.risk;

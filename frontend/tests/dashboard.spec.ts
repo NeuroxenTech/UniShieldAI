@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { attachFullPage } from "./_helpers";
 
-test.describe("UniShield AI Dashboard", () => {
+test.describe("SOC Command Center Dashboard", () => {
   test.afterEach(async ({ page }, testInfo) => {
     await attachFullPage(page, testInfo);
   });
@@ -10,72 +10,79 @@ test.describe("UniShield AI Dashboard", () => {
     await page.goto("/");
   });
 
-  test("page title and theme color are set", async ({ page }) => {
+  test("page title is set", async ({ page }) => {
     await expect(page).toHaveTitle(/UniShield AI/i);
   });
 
-  test("header renders with subtitle", async ({ page }) => {
-    await expect(
-      page.getByText("Security Overview", { exact: true })
-    ).toBeVisible();
-    await expect(
-      page.getByText(
-        "AI-powered monitoring and threat detection across unidirectional IP traffic."
-      )
-    ).toBeVisible();
-  });
-
-  test("six KPI cards render with expected values", async ({ page }) => {
-    const expectations = [
-      { label: "Total Flows", value: "1.28M" },
-      { label: "Packets Analyzed", value: "84.6M" },
-      { label: "Threats Detected", value: "342" },
-      { label: "Critical Alerts", value: "18" },
-      { label: "Anomalies", value: "1,482" },
-      { label: "Protected Assets", value: "126" },
+  test("six stat cards render with live values", async ({ page }) => {
+    const cards = [
+      { label: "Total Users", value: "12,480" },
+      { label: "Devices", value: "9,320" },
+      { label: "Mailboxes", value: "15,240" },
+      { label: "Browsers", value: "12,206" },
+      { label: "Cloud Drives", value: "3,840" },
+      { label: "Internet Assets", value: "518" },
     ];
 
-    for (const e of expectations) {
+    for (const c of cards) {
       await expect(
-        page.getByText(e.label, { exact: true }).first()
+        page.getByText(c.label, { exact: true }).first()
       ).toBeVisible();
-      await expect(page.getByText(e.value, { exact: true }).first()).toBeVisible();
+      await expect(page.getByText(c.value, { exact: true })).toBeVisible();
     }
   });
 
-  test("core dashboard panels are present", async ({ page }) => {
+  test("coverage radar panel shows legend and control axes", async ({ page }) => {
     await expect(
-      page.getByText("Threat Detection Overview", { exact: true })
+      page.getByText("Coverage & Issues by Security Control", { exact: true })
     ).toBeVisible();
-    await expect(page.getByText("Threats by Severity", { exact: true })).toBeVisible();
-    await expect(
-      page.getByText("Unidirectional Traffic Intelligence", { exact: true })
-    ).toBeVisible();
-    await expect(page.getByText("Live Threat Feed", { exact: true })).toBeVisible();
-    await expect(
-      page.getByText("UniShield AI Analysis", { exact: true })
-    ).toBeVisible();
-    // live status indicator
-    await expect(page.getByText("LIVE", { exact: true })).toBeVisible();
+    for (const label of ["Uncovered", "Covered", "Issues"]) {
+      await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
+    }
+    for (const axis of [
+      "Phishing Simulations",
+      "Cloud Posture",
+      "External Footprint",
+      "Dark Web",
+      "Cloud Data",
+      "Email Protection",
+      "Endpoint Security",
+      "Secure Browsing",
+    ]) {
+      await expect(page.getByText(axis, { exact: true })).toBeVisible();
+    }
   });
 
-  test("insights section shows expected title", async ({ page }) => {
-    await expect(page.getByText("Insights", { exact: true })).toBeVisible();
+  test("issues by risk panel shows total, meters and customers", async ({ page }) => {
+    await expect(page.getByText("Issues By Risk", { exact: true })).toBeVisible();
+    await expect(page.getByText("1,240", { exact: true })).toBeVisible();
+    for (const level of ["Critical", "High", "Medium", "Low"]) {
+      await expect(page.getByText(level, { exact: true })).toBeVisible();
+    }
+    for (const customer of ["Acme Corp", "Globex", "Initech"]) {
+      await expect(page.getByText(customer, { exact: true })).toBeVisible();
+    }
   });
 
-  test("recent network flows table renders flow data", async ({ page }) => {
+  test("insight cards are present", async ({ page }) => {
     await expect(
-      page.getByText("Recent Network Flows", { exact: true })
+      page.getByText("New Report Ready", { exact: true })
     ).toBeVisible();
-    await expect(page.getByText("10.24.18.42", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("185.x.x.xxx", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("12,492", { exact: true })).toBeVisible();
-    await expect(page.getByText("8.4 MB", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Security Alert", { exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByText("Setup Required", { exact: true })
+    ).toBeVisible();
   });
 
-  test("live threat feed shows severity rows", async ({ page }) => {
-    await expect(page.getByText("CRITICAL", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("HIGH", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("MEDIUM", { exact: true }).first()).toBeVisible();
+  test("chat widget toggles open and shows messages", async ({ page }) => {
+    await page.getByRole("button", { name: "Open chat" }).click();
+    await expect(
+      page.getByText("UniShield Assistant", { exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Acme currently has 42 open issues/)
+    ).toBeVisible();
   });
 });

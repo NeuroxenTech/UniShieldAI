@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { attachFullPage } from "./_helpers";
 
 const routes = [
-  { label: "Dashboard", path: "/", heading: "Security Overview" },
+  { label: "Dashboard", path: "/", marker: "Total Users" },
   { label: "Threat Detection", path: "/detection", heading: "Threat Detection" },
   { label: "Traffic Analysis", path: "/traffic", heading: "Traffic Analysis" },
   { label: "Alerts", path: "/alerts", heading: "Security Alerts" },
@@ -16,12 +16,18 @@ test.describe("Sidebar Navigation", () => {
   test.afterEach(async ({ page }, testInfo) => {
     await attachFullPage(page, testInfo);
   });
-  test("all eight nav destinations render their page headings", async ({ page }) => {
+  test("all eight nav destinations render their page content", async ({ page }) => {
     for (const r of routes) {
       await page.goto(r.path);
-      await expect(
-        page.getByRole("heading", { name: r.heading, exact: true })
-      ).toBeVisible();
+      if (r.heading) {
+        await expect(
+          page.getByRole("heading", { name: r.heading, exact: true })
+        ).toBeVisible();
+      } else {
+        await expect(
+          page.getByText(r.marker, { exact: true }).first()
+        ).toBeVisible();
+      }
     }
   });
 

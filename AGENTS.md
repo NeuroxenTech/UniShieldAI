@@ -60,7 +60,8 @@ No `requirements.txt` or `pyproject.toml` — backend deps (fastapi, uvicorn, sc
 
 ## Gotchas
 
-- No root `.gitignore` — only `frontend/.gitignore` exists.
+- No root `.gitignore` — only `frontend/.gitignore` exists (`dist/` and `node_modules/` are ignored).
 - No CI workflows, no pre-commit hooks.
 - Backend has no test suite.
-- `dist/` and `node_modules/` are committed in `frontend/` (check before pushing).
+- `frontend/src/data/demo.ts` and `components/dashboard/` are legacy (unused by the SOC dashboard); `zustand` in `package.json` is also unused.
+- New dashboard lives in `components/soc/` (glass/violet "SOC Command Center" theme) with typed mock data in `data/soc.ts` configured via props so API data can be wired in later.

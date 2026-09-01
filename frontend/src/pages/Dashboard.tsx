@@ -1,124 +1,71 @@
+import { GlassPanel } from "../components/soc/GlassPanel";
+import { StatCard } from "../components/soc/StatCard";
+import { CoverageRadar } from "../components/soc/CoverageRadar";
+import { IssuesByRisk } from "../components/soc/IssuesByRisk";
+import { InsightCard } from "../components/soc/InsightCard";
+import { ChatWidget } from "../components/soc/ChatWidget";
 import {
-  Activity,
-  Network,
-  ShieldAlert,
-  AlertTriangle,
-  Radar,
-  Server,
-} from "lucide-react";
-import { PageHeader } from "../components/layout/PageHeader";
-import { KPICard } from "../components/ui/KPICard";
-import { Card } from "../components/ui/Card";
-import { ThreatDetectionChart } from "../components/dashboard/ThreatDetectionChart";
-import { ThreatSeverity } from "../components/dashboard/ThreatSeverity";
-import { UnidirectionalRadar } from "../components/dashboard/UnidirectionalRadar";
-import { LiveThreatFeed } from "../components/dashboard/LiveThreatFeed";
-import { AIIntelligenceCard } from "../components/dashboard/AIIntelligenceCard";
-import { SecurityInsights } from "../components/dashboard/SecurityInsights";
-import { NetworkFlowsTable } from "../components/dashboard/NetworkFlowsTable";
-import { kpis, threatChartData, networkFlows } from "../data/demo";
+  statCards,
+  coverageAxes,
+  coverageIssues,
+  issuesByRisk,
+  insights,
+  chat,
+} from "../data/soc";
 
-const kpiIcons: Record<string, typeof Activity> = {
-  activity: Activity,
-  network: Network,
-  shield: ShieldAlert,
-  alert: AlertTriangle,
-  radar: Radar,
-  server: Server,
-};
-
-function LiveBadge() {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#34D399]">
-      <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] live-source" />
-      LIVE
-    </span>
-  );
-}
-
-const chartLegend = [
-  { label: "Detected", color: "#6366F1" },
-  { label: "Anomalies", color: "#9333EA" },
-  { label: "Baseline", color: "#64748B" },
+const legend = [
+  { label: "Uncovered", swatch: "border border-dashed border-[#64748B]" },
+  { label: "Covered", swatch: "bg-[#7C5CFC] shadow-[0_0_6px_rgba(124,92,252,0.8)]" },
+  { label: "Issues", swatch: "bg-[#FF4757] shadow-[0_0_6px_rgba(255,71,87,0.8)]" },
 ];
 
 export default function Dashboard() {
   return (
-    <div className="p-6 space-y-6">
-      <PageHeader
-        title="Security Overview"
-        subtitle="AI-powered monitoring and threat detection across unidirectional IP traffic."
-        showTimeRange
-      />
-
-      {/* KPI cards */}
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Stat card row */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        {kpis.map((k) => {
-          const Icon = kpiIcons[k.icon] ?? Activity;
-          return (
-            <KPICard
-              key={k.label}
-              label={k.label}
-              value={k.value}
-              change={k.change}
-              icon={Icon}
-              up={k.up}
-              changeLabel="vs previous period"
-            />
-          );
-        })}
+        {statCards.map((card) => (
+          <StatCard key={card.id} data={card} />
+        ))}
       </div>
 
-      {/* Main 2/3 + 1/3 grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2-col */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card
-            title="Threat Detection Overview"
-            action={<LiveBadge />}
-            headerClassName="!border-b-0"
-          >
-            <div className="flex items-center gap-4 px-1 pb-1">
-              {chartLegend.map((l) => (
-                <span key={l.label} className="flex items-center gap-1.5 text-[11px] text-[#94A3B8]">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: l.color }} />
+      {/* Coverage + Issues 65/35 split */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <GlassPanel
+          className="lg:col-span-3"
+          title="Coverage & Issues by Security Control"
+          subtitle="Unidirectional coverage across monitored security controls"
+          action={
+            <div className="flex items-center gap-3">
+              {legend.map((l) => (
+                <span
+                  key={l.label}
+                  className="flex items-center gap-1.5 text-[11px] text-[#94A3B8]"
+                >
+                  <span className={`w-2 h-2 rounded-full inline-block ${l.swatch}`} />
                   {l.label}
                 </span>
               ))}
             </div>
-            <ThreatDetectionChart data={threatChartData} />
-          </Card>
+          }
+        >
+          <CoverageRadar axes={coverageAxes} issues={coverageIssues} />
+        </GlassPanel>
 
-          <Card title="Threats by Severity">
-            <ThreatSeverity />
-          </Card>
-        </div>
-
-        {/* Right 1-col sidebar */}
-        <div className="space-y-6">
-          <Card title="Unidirectional Traffic Intelligence">
-            <UnidirectionalRadar />
-          </Card>
-
-          <Card title="Live Threat Feed">
-            <LiveThreatFeed />
-          </Card>
-
-          <Card title="UniShield AI Analysis">
-            <AIIntelligenceCard />
-          </Card>
+        <div className="lg:col-span-2">
+          <IssuesByRisk data={issuesByRisk} />
         </div>
       </div>
 
-      {/* Insights */}
-      <Card title="Insights" subtitle="16 AI-generated findings">
-        <SecurityInsights />
-      </Card>
+      {/* Insight cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {insights.map((insight) => (
+          <InsightCard key={insight.id} data={insight} />
+        ))}
+      </div>
 
-      {/* Network flows */}
-      <Card title="Recent Network Flows" action={<span className="text-[11px] text-[#818CF8]">View all</span>}>
-        <NetworkFlowsTable rows={networkFlows} />
-      </Card>
+      {/* Floating chat widget */}
+      <ChatWidget config={chat} />
     </div>
   );
 }
