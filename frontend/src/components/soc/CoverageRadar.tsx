@@ -113,17 +113,26 @@ export function CoverageRadar({ axes, issues }: CoverageRadarProps) {
           return (
             <circle
               key={dot.id}
+              className="radar-pulse"
               cx={p.x}
               cy={p.y}
               r={issueSize[dot.risk]}
               fill={c}
               stroke="#0A0A14"
               strokeWidth="1.2"
-              style={{ filter: `drop-shadow(0 0 4px ${c})` }}
+              style={{
+                filter: `drop-shadow(0 0 4px ${c})`,
+                animationDelay: `${(dot.angle / 360) * 2.6}s`,
+              }}
             />
           );
         })}
       </svg>
+
+      {/* rotating radar sweep — cosmetic, no content change */}
+      <div className="radar-sweep">
+        <div className="radar-sweep-beam" />
+      </div>
 
       {/* axis labels — HTML overlays for crisp text + lucide icons */}
       {axes.map((axis, i) => {

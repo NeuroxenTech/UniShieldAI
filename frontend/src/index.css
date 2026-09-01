@@ -137,6 +137,51 @@
       0 0 18px rgba(124, 92, 252, 0.35);
   }
 
+  @keyframes radarSweep {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes radarPulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  .radar-sweep {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 60%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border-radius: 9999px;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .radar-sweep-beam {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: conic-gradient(
+      from 0deg,
+      rgba(124, 92, 252, 0.0) 0deg,
+      rgba(124, 92, 252, 0.25) 45deg,
+      transparent 70deg,
+      transparent 360deg
+    );
+    animation: radarSweep 6s linear infinite;
+  }
+
+  .radar-pulse {
+    animation: radarPulse 2.6s ease-in-out infinite;
+  }
+
   .thin-scroll::-webkit-scrollbar {
     width: 8px;
     height: 8px;
