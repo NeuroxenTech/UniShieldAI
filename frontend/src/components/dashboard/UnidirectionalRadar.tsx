@@ -37,12 +37,10 @@ export function UnidirectionalRadar() {
   const ringRadii = [50, 100, 150];
 
   return (
-    <div className="ambient-radar w-full h-[400px] relative overflow-hidden rounded-lg flex items-center justify-center">
+    <div className="ambient-radar w-full relative overflow-hidden rounded-lg flex items-center justify-center p-2">
       <svg
-        width="400"
-        height="400"
         viewBox="0 0 400 400"
-        className="select-none"
+        className="select-none w-full h-auto max-w-[400px]"
       >
         {/* faint dot grid */}
         <radialGradient id="radarGlow" cx="50%" cy="50%" r="50%">

@@ -69,9 +69,9 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Main grid */}
+      {/* Main 2/3 + 1/3 grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2-col: Threat Detection Overview + severity */}
+        {/* Left 2-col */}
         <div className="lg:col-span-2 space-y-6">
           <Card
             title="Threat Detection Overview"
@@ -94,26 +94,24 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Right 1-col: Radar + Live feed + AI */}
+        {/* Right 1-col sidebar */}
         <div className="space-y-6">
           <Card title="Unidirectional Traffic Intelligence">
             <UnidirectionalRadar />
           </Card>
+
+          <Card title="Live Threat Feed">
+            <LiveThreatFeed />
+          </Card>
+
+          <Card title="UniShield AI Analysis">
+            <AIIntelligenceCard />
+          </Card>
         </div>
       </div>
 
-      {/* Live feed + AI row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Live Threat Feed">
-          <LiveThreatFeed />
-        </Card>
-        <Card title="UniShield AI Analysis">
-          <AIIntelligenceCard />
-        </Card>
-      </div>
-
       {/* Insights */}
-      <Card title="Insights">
+      <Card title="Insights" subtitle="16 AI-generated findings">
         <SecurityInsights />
       </Card>
 
