@@ -34,7 +34,7 @@ test.describe("Sidebar Navigation", () => {
   test("sidebar exposes tooltip labels for each item", async ({ page }) => {
     await page.goto("/");
     for (const r of routes) {
-      const tip = page.getByText(r.label, { exact: true });
+      const tip = page.getByRole("tooltip", { name: r.label, exact: true });
       await expect(tip).toBeAttached();
     }
   });

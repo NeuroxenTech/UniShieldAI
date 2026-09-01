@@ -5,11 +5,16 @@ import { cn } from "../../lib/cn";
 
 type Segment = "All Customers" | "Single Customer";
 
-export function TopBar() {
+export function TopBar({ expanded }: { expanded: boolean }) {
   const [segment, setSegment] = useState<Segment>("All Customers");
 
   return (
-    <header className="fixed top-0 left-0 md:left-16 right-0 z-30 h-16 px-4 md:px-6 bg-[#0A0A14]/80 backdrop-blur-md border-b border-white/[0.06] flex items-center justify-between gap-3">
+    <header
+      className={cn(
+        "fixed top-0 left-0 right-0 z-30 h-16 px-4 md:px-6 bg-[#0A0A14]/80 backdrop-blur-md border-b border-white/[0.06] flex items-center justify-between gap-3 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] md:left-16",
+        expanded && "md:left-[15rem]"
+      )}
+    >
       {/* Segmented pill toggle */}
       <div className="hidden sm:flex items-center p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
         {(["All Customers", "Single Customer"] as Segment[]).map((s) => (
