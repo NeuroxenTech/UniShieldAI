@@ -54,18 +54,18 @@ export default function ThreatDetection() {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             {pipeline.map((stage, i) => (
               <div key={stage.name} className="flex items-center gap-2 flex-1 min-w-[110px]">
-                <div className="flex-1 bg-[#161D2F] rounded-lg border border-white/[0.06] px-3 py-3 text-center">
+                <div className="flex-1 bg-white/[0.04] rounded-lg border border-white/[0.06] px-3 py-3 text-center">
                   <p className="text-[12px] font-semibold text-[#CBD5E1]">{stage.name}</p>
                   <p className="text-[10.5px] text-[#64748B] mt-0.5">{stage.detail}</p>
                 </div>
                 {i < pipeline.length - 1 && (
-                  <span className="text-[#4F46E5] text-[14px]">→</span>
+                  <span className="text-[#A78BFA] text-[14px]">→</span>
                 )}
               </div>
             ))}
           </div>
 
-          <div className="mt-5 p-3 rounded-lg bg-white/[0.03] border border-white/[0.05] flex items-center gap-2">
+          <div className="mt-5 p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#34D399] live-source" />
             <span className="text-[12px] text-[#94A3B8]">
               Rules engine and AI/ML engine operating in parallel across 14,281 live flows/sec.
@@ -74,7 +74,7 @@ export default function ThreatDetection() {
         </Card>
 
         {/* Detected threats */}
-        <Card title="Currently Detected" action={<span className="text-[11px] text-[#818CF8]">View all</span>}>
+        <Card title="Currently Detected" action={<span className="text-[11px] text-[#A78BFA]">View all</span>}>
           <div className="space-y-2 -mx-5 -mt-3 px-5">
             {rows.map((r, i) => (
               <div key={i} className="flex items-center gap-3 py-2.5 border-b border-white/[0.04] last:border-0">
@@ -84,7 +84,7 @@ export default function ThreatDetection() {
                   <p className="text-[11px] font-mono text-[#94A3B8] truncate">{r.src} → {r.dst}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] text-[#818CF8] tabular">{r.confidence}</p>
+                  <p className="text-[11px] text-[#A78BFA] tabular">{r.confidence}</p>
                   <p className="text-[10px] text-[#64748B]">{r.status}</p>
                 </div>
               </div>
@@ -97,7 +97,7 @@ export default function ThreatDetection() {
       <Card title="Model Performance">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {models.map((m) => (
-            <div key={m.name} className="bg-[#161D2F] rounded-xl p-4 border border-white/[0.05]">
+            <div key={m.name} className="bg-white/[0.04] rounded-xl p-4 border border-white/[0.06]">
               <p className="text-[13px] font-semibold text-white mb-3">{m.name}</p>
               {[
                 { label: "Accuracy", value: m.acc },
@@ -107,10 +107,10 @@ export default function ThreatDetection() {
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-center gap-2 mb-2">
                   <span className="text-[11px] text-[#94A3B8] w-16">{label}</span>
-                  <div className="flex-1 h-[5px] bg-[#0E1324] rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-[#4F46E5] to-[#9333EA]" style={{ width: `${value}%` }} />
+                  <div className="flex-1 h-[5px] bg-white/[0.05] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-[#7C5CFC] to-[#A78BFA]" style={{ width: `${value}%` }} />
                   </div>
-                  <span className="text-[11px] text-[#818CF8] tabular w-10 text-right">{value.toFixed(1)}%</span>
+                  <span className="text-[11px] text-[#A78BFA] tabular w-10 text-right">{value.toFixed(1)}%</span>
                 </div>
               ))}
             </div>

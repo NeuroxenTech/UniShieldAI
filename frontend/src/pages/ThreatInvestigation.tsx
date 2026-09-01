@@ -54,7 +54,7 @@ export default function ThreatInvestigation() {
       <PageHeader title="Threat Investigation" subtitle="UniShield AI investigation workspace" />
 
       {/* Threat header */}
-      <div className="flex items-center justify-between bg-[#0E1324] rounded-xl border border-white/[0.05] card-shadow px-5 py-4">
+      <div className="flex items-center justify-between glass-panel px-5 py-4">
         <div className="flex items-center gap-4">
           <div>
             <p className="text-[11px] text-[#64748B]">Threat ID</p>
@@ -93,18 +93,18 @@ export default function ThreatInvestigation() {
               <ComposedChart data={timelineData} margin={{ top: 10, right: 8, left: -18, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gTimeline" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#F43F5E" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#FF4757" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#FF4757" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="4 8" stroke="rgba(255,255,255,0.04)" vertical={false} />
                 <XAxis dataKey="time" stroke="#64748B" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} dy={8} />
                 <YAxis stroke="#64748B" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: "#161D2F", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{ backgroundColor: "#151528", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 12 }}
                 />
-                <Area type="monotone" dataKey="count" name="Packets" stroke="#F43F5E" strokeWidth={2} fill="url(#gTimeline)" />
-                <Line type="monotone" dataKey="count" stroke="#F43F5E" strokeWidth={1.5} dot={{ r: 2.5, fill: "#F43F5E" }} />
+                <Area type="monotone" dataKey="count" name="Packets" stroke="#FF4757" strokeWidth={2} fill="url(#gTimeline)" />
+                <Line type="monotone" dataKey="count" stroke="#FF4757" strokeWidth={1.5} dot={{ r: 2.5, fill: "#FF4757" }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -127,10 +127,10 @@ export default function ThreatInvestigation() {
                 <div key={c.label}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[12px] text-[#CBD5E1]">{c.label}</span>
-                    <span className="text-[12px] text-[#818CF8] tabular">{c.value.toFixed(1)}%</span>
+                    <span className="text-[12px] text-[#A78BFA] tabular">{c.value.toFixed(1)}%</span>
                   </div>
-                  <div className="h-[5px] w-full bg-[#161D2F] rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-[#4F46E5] to-[#9333EA]" style={{ width: `${c.value}%` }} />
+                  <div className="h-[5px] w-full bg-white/[0.05] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-[#7C5CFC] to-[#A78BFA]" style={{ width: `${c.value}%` }} />
                   </div>
                 </div>
               ))}
@@ -156,7 +156,7 @@ export default function ThreatInvestigation() {
               <ul className="space-y-1.5">
                 {["Isolate affected host", "Capture live traffic", "Revoke suspect credentials"].map((a) => (
                   <li key={a} className="flex items-start gap-2 text-[12.5px] text-[#94A3B8]">
-                    <span className="text-[#818CF8] mt-0.5 text-[11px]">▸</span>
+                    <span className="text-[#A78BFA] mt-0.5 text-[11px]">▸</span>
                     {a}
                   </li>
                 ))}

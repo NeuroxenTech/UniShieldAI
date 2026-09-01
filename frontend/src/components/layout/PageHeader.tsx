@@ -33,14 +33,14 @@ export function PageHeader({
         {actions}
         {showTimeRange && (
           <>
-            <div className="flex items-center p-1 rounded-full bg-[#0E1324] border border-white/[0.05]">
+            <div className="flex items-center p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
               {ranges.map((r, i) => (
                 <button
                   key={r}
                   className={cn(
                     "px-3 h-8 rounded-full text-[12px] font-medium whitespace-nowrap transition-all duration-150",
                     i === 0
-                      ? "bg-[#1A2235] text-white"
+                      ? "bg-white/[0.08] text-white"
                       : "text-[#94A3B8] hover:text-[#CBD5E1]"
                   )}
                 >
@@ -50,7 +50,7 @@ export function PageHeader({
             </div>
             <button
               onClick={onRefresh}
-              className="w-9 h-9 rounded-lg bg-[#0E1324] border border-white/[0.06] flex items-center justify-center text-[#94A3B8] hover:text-[#CBD5E1] transition-colors"
+              className="w-9 h-9 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center justify-center text-[#94A3B8] hover:text-[#CBD5E1] hover:border-white/[0.12] transition-colors"
             >
               <RefreshCw size={16} strokeWidth={1.75} />
             </button>

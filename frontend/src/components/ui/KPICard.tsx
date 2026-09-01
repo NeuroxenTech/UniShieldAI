@@ -12,16 +12,16 @@ interface KPICardProps {
 }
 
 export function KPICard({ label, value, change, up = true, icon: Icon, changeLabel }: KPICardProps) {
-  const changeClass = up ? "text-[#34D399]" : "text-[#F43F5E]";
+  const changeClass = up ? "text-[#6BCB77]" : "text-[#FF4757]";
   const arrow = up ? "▲" : "▼";
 
   return (
-    <div className="bg-[#0E1324] rounded-xl border border-white/[0.05] card-shadow p-4 relative overflow-hidden group hover:border-white/[0.10] hover:-translate-y-0.5 transition-all duration-200">
-      <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#4F46E5]/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-      <div className="absolute -top-10 -right-10 w-28 h-28 rounded-full bg-[#4F46E5]/10 blur-2xl transition-opacity opacity-0 group-hover:opacity-100" />
+    <div className="glass-panel glass-hover p-4 relative overflow-hidden group">
+      <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#7C5CFC]/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div className="absolute -top-10 -right-10 w-28 h-28 rounded-full bg-[#7C5CFC]/15 blur-2xl transition-opacity opacity-0 group-hover:opacity-100" />
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-medium text-[#94A3B8] uppercase tracking-wide">{label}</p>
-        <div className="w-8 h-8 rounded-lg bg-[#4F46E5]/15 flex items-center justify-center text-[#818CF8]">
+        <div className="w-8 h-8 rounded-lg bg-[#7C5CFC]/15 flex items-center justify-center text-[#A78BFA]">
           <Icon size={16} strokeWidth={1.75} />
         </div>
       </div>

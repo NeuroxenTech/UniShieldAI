@@ -19,16 +19,11 @@ export function Card({
   headerClassName,
 }: CardProps) {
   return (
-    <div
-      className={cn(
-        "bg-[#0E1324] rounded-xl border border-white/[0.05] card-shadow",
-        className
-      )}
-    >
+    <div className={cn("glass-panel glass-hover", className)}>
       {(title || action) && (
         <div
           className={cn(
-            "flex items-center justify-between gap-4 border-b border-white/[0.05] px-5 py-4",
+            "flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-4",
             headerClassName
           )}
         >

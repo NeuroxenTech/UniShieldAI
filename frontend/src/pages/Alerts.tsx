@@ -26,16 +26,16 @@ const rows: AlertRow[] = [
 ];
 
 const sevStyle: Record<SeverityKey, { color: string; bg: string }> = {
-  critical: { color: colors.red, bg: "rgba(244,63,94,0.10)" },
-  high: { color: colors.pink, bg: "rgba(236,72,153,0.10)" },
-  medium: { color: colors.amber, bg: "rgba(245,158,11,0.10)" },
-  low: { color: colors.yellow, bg: "rgba(250,204,21,0.10)" },
+  critical: { color: "#FF4757", bg: "rgba(255,71,87,0.10)" },
+  high: { color: "#FF9F43", bg: "rgba(255,159,67,0.10)" },
+  medium: { color: "#FFD93D", bg: "rgba(255,217,61,0.10)" },
+  low: { color: "#6BCB77", bg: "rgba(107,203,119,0.10)" },
 };
 
 const statusStyle: Record<AlertRow["status"], string> = {
-  New: "#818CF8",
-  Investigating: colors.amber,
-  Resolved: colors.green,
+  New: "#A78BFA",
+  Investigating: "#FF9F43",
+  Resolved: "#6BCB77",
   Ignored: colors.text4,
 };
 
@@ -54,7 +54,7 @@ export default function Alerts() {
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 flex-1 min-w-[240px] bg-[#0E1324] border border-white/[0.06] rounded-lg px-3 h-10 max-w-md">
+        <div className="flex items-center gap-2 flex-1 min-w-[240px] bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 h-10 max-w-md">
           <Search size={15} className="text-[#64748B]" />
           <input
             placeholder="Search alerts"
@@ -65,13 +65,13 @@ export default function Alerts() {
           {filters.map((f) => (
             <button
               key={f}
-              className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-[#0E1324] border border-white/[0.06] text-[12px] text-[#94A3B8] hover:border-white/[0.12] hover:text-[#CBD5E1] transition-colors"
+              className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[12px] text-[#94A3B8] hover:border-white/[0.12] hover:text-[#CBD5E1] transition-colors"
             >
               {f}
               <ChevronDown size={13} className="text-[#64748B]" />
             </button>
           ))}
-          <button className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-[#0E1324] border border-white/[0.06] text-[12px] text-[#818CF8] hover:border-white/[0.12] transition-colors">
+          <button className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[12px] text-[#A78BFA] hover:border-white/[0.12] transition-colors">
             <Filter size={14} />
             Filters
           </button>
@@ -87,8 +87,8 @@ export default function Alerts() {
             className={cn(
               "px-4 h-9 rounded-lg text-[13px] font-medium transition-all duration-150",
               activeStatus === s
-                ? "bg-[#1A2235] text-white"
-                : "text-[#94A3B8] hover:text-[#CBD5E1] bg-[#0E1324] border border-white/[0.06]"
+                ? "accent-gradient text-white shadow-[0_2px_12px_rgba(124,92,252,0.3)]"
+                : "text-[#94A3B8] hover:text-[#CBD5E1] bg-white/[0.03] border border-white/[0.06]"
             )}
           >
             {s}
@@ -102,7 +102,7 @@ export default function Alerts() {
           {filtered.map((row, i) => (
             <div
               key={i}
-              className="flex items-center gap-4 px-5 py-4 border-b border-white/[0.04] last:border-0 hover:bg-[#161D2F] transition-colors"
+              className="flex items-center gap-4 px-5 py-4 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.03] transition-colors"
             >
               <div
                 className="w-[3px] self-stretch rounded-full"
@@ -119,7 +119,7 @@ export default function Alerts() {
                   {row.src} <span className="text-[#64748B]">→</span> {row.dst}
                 </p>
               </div>
-              <div className="text-[12px] text-[#818CF8] tabular w-20 text-right">{row.confidence}</div>
+              <div className="text-[12px] text-[#A78BFA] tabular w-20 text-right">{row.confidence}</div>
               <div className="text-[12px] text-[#64748B] w-24 text-right">{row.time}</div>
               <div className="w-28 text-right">
                 <span className="text-[11px] font-medium" style={{ color: statusStyle[row.status] }}>

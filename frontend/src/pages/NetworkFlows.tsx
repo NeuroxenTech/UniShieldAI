@@ -24,14 +24,14 @@ export default function NetworkFlows() {
           <div className="flex items-center gap-2">
             <div className="flex items-center p-1 rounded-lg bg-white/[0.03] border border-white/[0.06]">
               {["All", "Outbound", "Inbound"].map((f, i) => (
-                <button key={f} className={`px-3 h-7 rounded-md text-[12px] font-medium ${i === 0 ? "bg-[#1A2235] text-white" : "text-[#94A3B8]"}`}>
+                <button key={f} className={`px-3 h-7 rounded-md text-[12px] font-medium ${i === 0 ? "accent-gradient text-white" : "text-[#94A3B8]"}`}>
                   {f}
                 </button>
               ))}
             </div>
             <div className="flex items-center p-1 rounded-lg bg-white/[0.03] border border-white/[0.06]">
               {["Detected", "Analyzing", "Normal"].map((f, i) => (
-                <button key={f} className={`px-3 h-7 rounded-md text-[12px] font-medium ${i === 0 ? "bg-[#1A2235] text-white" : "text-[#94A3B8]"}`}>
+                <button key={f} className={`px-3 h-7 rounded-md text-[12px] font-medium ${i === 0 ? "accent-gradient text-white" : "text-[#94A3B8]"}`}>
                   {f}
                 </button>
               ))}

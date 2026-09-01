@@ -33,7 +33,7 @@ export default function AIIntelligence() {
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-5">
-            <div className="p-4 rounded-xl bg-[#161D2F] border border-white/[0.05]">
+            <div className="p-4 rounded-xl bg-white/[0.04] border border-white/[0.05]">
               <p className="text-[11px] font-semibold text-[#64748B] mb-2">THREAT SUMMARY</p>
               <p className="text-[13.5px] leading-relaxed text-[#CBD5E1]">
                 Elevated outbound traffic from host{" "}
@@ -44,7 +44,7 @@ export default function AIIntelligence() {
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#161D2F] border border-white/[0.05]">
+            <div className="p-4 rounded-xl bg-white/[0.04] border border-white/[0.05]">
               <p className="text-[11px] font-semibold text-[#64748B] mb-2">BEHAVIOR ANALYSIS</p>
               <p className="text-[13.5px] leading-relaxed text-[#CBD5E1]">
                 Connections occur at regular 60-second intervals with consistent
@@ -53,10 +53,10 @@ export default function AIIntelligence() {
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#161D2F] border border-white/[0.05]">
+            <div className="p-4 rounded-xl bg-white/[0.04] border border-white/[0.05]">
               <p className="text-[11px] font-semibold text-[#64748B] mb-2">ANOMALY EXPLANATION</p>
               <p className="text-[13.5px] leading-relaxed text-[#CBD5E1]">
-                Anomaly score of <span className="font-mono text-[#F43F5E]">0.91</span>{" "}
+                Anomaly score of <span className="font-mono text-[#FF4757]">0.91</span>{" "}
                 driven by high periodicity and low inter-arrival time variance,
                 inconsistent with legitimate traffic.
               </p>
@@ -64,11 +64,11 @@ export default function AIIntelligence() {
           </div>
 
           <div className="space-y-5">
-            <div className="p-4 rounded-xl bg-[#161D2F] border border-white/[0.05]">
+            <div className="p-4 rounded-xl bg-white/[0.04] border border-white/[0.05]">
               <p className="text-[11px] font-semibold text-[#64748B] mb-2">RISK ASSESSMENT</p>
               <div className="flex items-center gap-4">
                 <div className="text-center">
-                  <p className="text-[24px] font-semibold text-[#F43F5E] tabular">97.4</p>
+                  <p className="text-[24px] font-semibold text-[#FF4757] tabular">97.4</p>
                   <p className="text-[11px] text-[#64748B]">Risk Score</p>
                 </div>
                 <div className="w-[2px] h-10 bg-white/[0.06]" />
@@ -79,17 +79,17 @@ export default function AIIntelligence() {
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#161D2F] border border-white/[0.05]">
+            <div className="p-4 rounded-xl bg-white/[0.04] border border-white/[0.05]">
               <p className="text-[11px] font-semibold text-[#64748B] mb-3">MODEL CONFIDENCE</p>
               <div className="space-y-3">
                 {modelConfidence.map((c) => (
                   <div key={c.label}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[12px] text-[#CBD5E1]">{c.label}</span>
-                      <span className="text-[12px] text-[#818CF8] tabular">{c.value.toFixed(1)}%</span>
+                      <span className="text-[12px] text-[#A78BFA] tabular">{c.value.toFixed(1)}%</span>
                     </div>
-                    <div className="h-[5px] w-full bg-[#0E1324] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-[#4F46E5] to-[#9333EA]" style={{ width: `${c.value}%` }} />
+                    <div className="h-[5px] w-full bg-white/[0.05] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-[#7C5CFC] to-[#A78BFA]" style={{ width: `${c.value}%` }} />
                     </div>
                   </div>
                 ))}
@@ -103,8 +103,8 @@ export default function AIIntelligence() {
       <Card title="Recommended Actions">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {actions.map((a) => (
-            <div key={a} className="flex items-center gap-3 p-3 rounded-xl bg-[#161D2F] border border-white/[0.05]">
-              <span className="text-[#818CF8] text-[14px]">▸</span>
+            <div key={a} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/[0.05]">
+              <span className="text-[#A78BFA] text-[14px]">▸</span>
               <span className="text-[13px] text-[#CBD5E1]">{a}</span>
             </div>
           ))}

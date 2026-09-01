@@ -21,7 +21,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
       onClick={() => onChange(!on)}
       className={cn(
         "relative w-10 h-5 rounded-full transition-colors",
-        on ? "bg-[#4F46E5]" : "bg-[#161D2F]"
+        on ? "bg-[#7C5CFC]" : "bg-white/[0.08]"
       )}
     >
       <span
@@ -63,7 +63,7 @@ export default function Settings() {
 
       <div className="grid grid-cols-[240px_1fr] gap-6">
         {/* Left settings nav */}
-        <div className="bg-[#0E1324] rounded-xl border border-white/[0.05] p-2">
+        <div className="glass-panel p-2">
           {categories.map((c) => (
             <button
               key={c}
@@ -71,7 +71,7 @@ export default function Settings() {
               className={cn(
                 "w-full text-left px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150",
                 active === c
-                  ? "bg-[#1A2235] text-white"
+                  ? "accent-gradient text-white shadow-[0_2px_12px_rgba(124,92,252,0.25)]"
                   : "text-[#94A3B8] hover:text-[#CBD5E1] hover:bg-white/[0.03]"
               )}
             >

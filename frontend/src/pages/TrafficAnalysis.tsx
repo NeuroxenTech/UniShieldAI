@@ -31,10 +31,10 @@ const volumeData = [
 ];
 
 const protocolData = [
-  { name: "TCP", value: 42, color: "#6366F1" },
-  { name: "UDP", value: 28, color: "#9333EA" },
-  { name: "HTTPS", value: 14, color: "#818CF8" },
-  { name: "DNS", value: 9, color: "#A78BFA" },
+  { name: "TCP", value: 42, color: "#7C5CFC" },
+  { name: "UDP", value: 28, color: "#A78BFA" },
+  { name: "HTTPS", value: 14, color: "#C4B5FD" },
+  { name: "DNS", value: 9, color: "#818CF8" },
   { name: "HTTP", value: 5, color: "#64748B" },
   { name: "ICMP", value: 2, color: "#94A3B8" },
 ];
@@ -43,14 +43,14 @@ const talkers = [
   { ip: "10.24.18.42", pct: 34, color: "#F43F5E" },
   { ip: "10.24.22.17", pct: 26, color: "#EC4899" },
   { ip: "10.24.9.21", pct: 18, color: "#F59E0B" },
-  { ip: "10.24.5.88", pct: 12, color: "#818CF8" },
+  { ip: "10.24.5.88", pct: 12, color: "#A78BFA" },
   { ip: "10.24.0.12", pct: 10, color: "#34D399" },
 ];
 
 const ChartTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#161D2F] border border-white/[0.08] rounded-lg px-3 py-2 shadow-xl">
+    <div className="bg-[#151528] border border-white/[0.08] rounded-lg px-3 py-2 shadow-xl">
       <p className="text-[11px] text-[#94A3B8] mb-1">{label}</p>
       {payload.map((p, i) => (
         <p key={i} className="text-[12px] text-white tabular">
@@ -85,12 +85,12 @@ export default function TrafficAnalysis() {
               <AreaChart data={volumeData} margin={{ top: 10, right: 8, left: -14, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#7C5CFC" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#7C5CFC" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gOut" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#9333EA" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#9333EA" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#A78BFA" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#A78BFA" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="4 8" stroke="rgba(255,255,255,0.04)" vertical={false} />
@@ -98,8 +98,8 @@ export default function TrafficAnalysis() {
                 <YAxis stroke="#64748B" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
                 <Tooltip content={ChartTooltip} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Area type="monotone" dataKey="in" name="Inbound" stroke="#6366F1" strokeWidth={2} fill="url(#gIn)" />
-                <Area type="monotone" dataKey="out" name="Outbound" stroke="#9333EA" strokeWidth={2} fill="url(#gOut)" />
+                <Area type="monotone" dataKey="in" name="Inbound" stroke="#7C5CFC" strokeWidth={2} fill="url(#gIn)" />
+                <Area type="monotone" dataKey="out" name="Outbound" stroke="#A78BFA" strokeWidth={2} fill="url(#gOut)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -133,7 +133,7 @@ export default function TrafficAnalysis() {
                   <span className="text-[12px] font-mono text-[#CBD5E1]">{t.ip}</span>
                   <span className="text-[12px] text-[#94A3B8] tabular">{t.pct}%</span>
                 </div>
-                <div className="h-[6px] w-full bg-[#161D2F] rounded-full overflow-hidden">
+                <div className="h-[6px] w-full bg-white/[0.05] rounded-full overflow-hidden">
                   <div className="h-full rounded-full" style={{ width: `${t.pct * 2.5}%`, backgroundColor: t.color, boxShadow: `0 0 8px ${t.color}66` }} />
                 </div>
               </div>
@@ -151,8 +151,8 @@ export default function TrafficAnalysis() {
                 <YAxis stroke="#64748B" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
                 <Tooltip content={ChartTooltip} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar dataKey="in" name="Inbound" fill="#6366F1" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="out" name="Outbound" fill="#9333EA" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="in" name="Inbound" fill="#7C5CFC" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="out" name="Outbound" fill="#A78BFA" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

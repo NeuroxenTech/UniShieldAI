@@ -23,9 +23,9 @@ export default function Reports() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
         {reports.map((r) => (
-          <div key={r.title} className="group bg-[#0E1324] rounded-xl border border-white/[0.05] card-shadow p-5 hover:bg-[#101731] transition-colors">
+          <div key={r.title} className="group glass-panel glass-hover p-5">
             <div className="flex items-start justify-between">
-              <div className="w-10 h-10 rounded-lg bg-[#4F46E5]/15 flex items-center justify-center text-[#818CF8]">
+              <div className="w-10 h-10 rounded-lg bg-[#7C5CFC]/15 flex items-center justify-center text-[#A78BFA]">
                 <FileText size={18} strokeWidth={1.75} />
               </div>
               <button className="text-[#64748B] hover:text-[#94A3B8] transition-colors">

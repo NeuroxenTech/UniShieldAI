@@ -1,5 +1,4 @@
 import { cn } from "../../lib/cn";
-import { colors } from "../../theme";
 
 export interface FlowRow {
   timestamp: string;
@@ -14,17 +13,17 @@ export interface FlowRow {
 }
 
 const riskColor: Record<FlowRow["risk"], string> = {
-  Critical: colors.red,
-  High: colors.pink,
-  Medium: colors.amber,
-  Low: colors.yellow,
-  Normal: colors.green,
+  Critical: "#FF4757",
+  High: "#FF9F43",
+  Medium: "#FFD93D",
+  Low: "#6BCB77",
+  Normal: "#6BCB77",
 };
 
 const statusStyle: Record<FlowRow["status"], { color: string; bg: string }> = {
-  Detected: { color: colors.red, bg: "rgba(244,63,94,0.10)" },
-  Analyzing: { color: colors.amber, bg: "rgba(245,158,11,0.10)" },
-  Normal: { color: colors.green, bg: "rgba(52,211,153,0.10)" },
+  Detected: { color: "#FF4757", bg: "rgba(255,71,87,0.10)" },
+  Analyzing: { color: "#FFD93D", bg: "rgba(255,217,61,0.10)" },
+  Normal: { color: "#6BCB77", bg: "rgba(107,203,119,0.10)" },
 };
 
 export function NetworkFlowsTable({ rows }: { rows: FlowRow[] }) {
@@ -57,7 +56,7 @@ export function NetworkFlowsTable({ rows }: { rows: FlowRow[] }) {
           {rows.map((r, i) => (
             <tr
               key={i}
-              className="border-b border-white/[0.03] bg-[#0E1324] hover:bg-[#161D2F] transition-colors"
+              className="border-b border-white/[0.03] hover:bg-white/[0.03] transition-colors"
             >
               <td className="py-3 px-3 text-[12px] font-mono text-[#94A3B8] whitespace-nowrap">
                 {r.timestamp}
@@ -68,7 +67,7 @@ export function NetworkFlowsTable({ rows }: { rows: FlowRow[] }) {
               <td className="py-3 px-3 text-[12px] font-mono text-[#CBD5E1] whitespace-nowrap">
                 {r.dst}
               </td>
-              <td className="py-3 px-3 text-[12px] font-mono text-[#818CF8] uppercase">
+              <td className="py-3 px-3 text-[12px] font-mono text-[#A78BFA] uppercase">
                 {r.protocol}
               </td>
               <td className="py-3 px-3 text-[12px] font-mono text-[#94A3B8] tabular">
