@@ -109,7 +109,15 @@ class AlertManager:
             self._active.pop(k, None)
 
     def recent(self, limit: int = 100) -> list[AlertContext]:
-        return list(self._recent)[:limit]
+        # Sort by freshness, not insertion order: an old flood that keeps
+        # pulsing refreshes its timestamp, so the list must track activity,
+        # otherwise stale alerts dominate "recent detections".
+        ordered = sorted(
+            self._recent,
+            key=lambda ctx: ctx.alert.timestamp,
+            reverse=True,
+        )
+        return ordered[:limit]
 
     def set_pcap_path(self, alert_id: str, path: str) -> None:
         for ctx in self._recent:

@@ -36,6 +36,14 @@ class FlowPcapRecorder:
 
     def start(self) -> None:
         self._running = True
+        # A leftover capture from a previous run would keep growing across
+        # restarts (append mode). Roll it into the archive and start fresh so
+        # the active capture stays bounded by max_bytes.
+        if self._current.exists() and self._current.stat().st_size > 0:
+            try:
+                self._rotate()
+            except Exception:
+                pass
         logger.info("Flow capture started → %s", self._current)
 
     def stop(self) -> None:
@@ -98,6 +106,7 @@ class FlowPcapRecorder:
                 timestamp = time.strftime("%Y%m%d_%H%M%S")
                 import shutil
                 shutil.copy2(self._current, archive_dir / f"rolling_{timestamp}.pcap")
+                self._current.unlink(missing_ok=True)
             except Exception:
                 pass
         self._open_writer()

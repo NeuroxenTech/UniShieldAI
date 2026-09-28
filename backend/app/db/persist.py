@@ -90,6 +90,21 @@ async def persist_alert(ctx) -> None:
         logger.exception("Failed to persist alert %s", getattr(ctx, "alert_id", "?"))
 
 
+async def update_alert_pcap_path(alert_id: str, path: str) -> None:
+    """Attach the preserved incident pcap to an already-persisted alert.
+
+    ``create_alert`` persists the DB row before evidence preservation runs, so
+    the record is written with ``pcap_path=None``; the Investigation page reads
+    alerts from the DB and would otherwise fall back to the shared live buffer.
+    """
+    try:
+        async with SessionLocal() as session:
+            repo = AlertRepository(session)
+            await repo.set_pcap_path(alert_id, path)
+    except Exception:
+        logger.exception("Failed to update pcap_path for alert %s", alert_id)
+
+
 async def persist_metrics_snapshot() -> None:
     snap = runtime_metrics.snapshot()
     stats = TrafficStats(

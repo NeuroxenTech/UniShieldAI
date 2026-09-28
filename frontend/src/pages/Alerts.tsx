@@ -8,6 +8,7 @@ import { SeverityBadge } from "../components/alerts/SeverityBadge";
 import { ThreatBadge } from "../components/alerts/ThreatBadge";
 import { FlowPair, StatusChip } from "../components/alerts/AlertRow";
 import { EmptyState, SearchEmptyState } from "../components/alerts/EmptyState";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { severityMeta } from "../lib/threats";
 import { humanThreatType, timeAgo, type Alert } from "../lib/api";
 import { cn } from "../lib/cn";
@@ -43,6 +44,8 @@ export default function Alerts() {
     sources.forEach((s) => s.active && m.set(s.ip, true));
     return m;
   }, [sources]);
+
+  const showFlow = useMediaQuery("(min-width: 1280px)");
 
   const threatTypes = useMemo(
     () => [...new Set(alerts.map((a) => a.threat_type))].sort(),
@@ -113,7 +116,7 @@ export default function Alerts() {
           ]}
         />
         {/* Status tabs */}
-        <div className="flex items-center p-1 rounded-lg bg-white/[0.03] border border-white/[0.06] overflow-x-auto thin-scroll">
+        <div className="flex items-center p-1 rounded-lg bg-white/[0.03] border border-white/[0.06] overflow-x-auto thin-scroll min-w-0 w-full sm:w-auto sm:flex-1">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -179,7 +182,7 @@ export default function Alerts() {
                   srcPort={a.src_port}
                   dstPort={a.dst_port}
                   protocol={a.protocol}
-                  className="hidden xl:inline-flex flex-1 min-w-0"
+                  className={`${showFlow ? "flex-1 " : "hidden "}min-w-0`}
                 />
                 <span className="hidden sm:flex w-[110px] gap-1 flex-wrap">
                   {(a.detection_sources ?? []).slice(0, 2).map((s) => (

@@ -3,6 +3,8 @@ from typing import Any
 
 from fastapi import WebSocket
 
+SEND_TIMEOUT = 5.0
+
 
 class ConnectionManager:
     def __init__(self) -> None:
@@ -19,16 +21,24 @@ class ConnectionManager:
             if websocket in self._connections:
                 self._connections.remove(websocket)
 
+    async def _send(self, websocket: WebSocket, message: dict[str, Any]) -> bool:
+        try:
+            await asyncio.wait_for(websocket.send_json(message), timeout=SEND_TIMEOUT)
+            return True
+        except asyncio.TimeoutError:
+            return False
+        except Exception:
+            return False
+
     async def broadcast(self, message: dict[str, Any]) -> int:
         stale: list[WebSocket] = []
         sent = 0
         async with self._lock:
             connections = list(self._connections)
         for websocket in connections:
-            try:
-                await websocket.send_json(message)
+            if await self._send(websocket, message):
                 sent += 1
-            except Exception:
+            else:
                 stale.append(websocket)
         for websocket in stale:
             await self.disconnect(websocket)

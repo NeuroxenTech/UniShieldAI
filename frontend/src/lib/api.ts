@@ -109,6 +109,7 @@ export interface CapturePacket {
   len: number;
   flags: string;
   summary: string;
+  idx?: number;
   hex?: string;
   raw_len?: number;
   decode?: CapturePacketDecode;
@@ -245,10 +246,34 @@ export const api = {
   /* traffic captures */
   captures: () => request<CapturesResponse>(`/api/v1/captures/incidents`),
   activeCapture: () => request<ActiveCapture>(`/api/v1/captures/active`),
-  capturePackets: (file: string, limit = 200, offset = 0) =>
-    request<CapturePacketsResponse>(
-      `/api/v1/captures/packets?file=${encodeURIComponent(file)}&limit=${limit}&offset=${offset}`
-    ),
+  capturePackets: (
+    file: string,
+    limit = 200,
+    offset = 0,
+    filters: {
+      q?: string;
+      src?: string;
+      dst?: string;
+      proto?: string;
+      sport?: number | null;
+      dport?: number | null;
+    } = {}
+  ) => {
+    const params = new URLSearchParams({
+      file,
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (filters.q) params.set("q", filters.q);
+    if (filters.src) params.set("src", filters.src);
+    if (filters.dst) params.set("dst", filters.dst);
+    if (filters.proto && filters.proto !== "all") params.set("proto", filters.proto);
+    if (filters.sport != null) params.set("sport", String(filters.sport));
+    if (filters.dport != null) params.set("dport", String(filters.dport));
+    return request<CapturePacketsResponse>(
+      `/api/v1/captures/packets?${params.toString()}`
+    );
+  },
   captureDownloadUrl: (file: string) =>
     `${BASE}/api/v1/captures/download?file=${encodeURIComponent(file)}`,
 };

@@ -40,9 +40,18 @@ async def get_alert(
 ) -> AlertOut:
     repo = AlertRepository(session)
     alert = await repo.get_by_id(alert_id)
-    if alert is None:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    return alert
+    if alert is not None:
+        return alert
+    # Persistence and the DB audit log can lag or be cleaned (test/dev data,
+    # DB resets) while the alert still lives in this engine session's memory.
+    # Fall back to the live context so a still-visible alert never 404s.
+    live = next(
+        (ctx for ctx in pipeline.alert_manager.recent() if ctx.alert_id == alert_id),
+        None,
+    )
+    if live is not None:
+        return _ctx_to_schema(live)
+    raise HTTPException(status_code=404, detail="Alert not found")
 
 
 @router.post("/{alert_id}/resolve")

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   api,
+  parseApiTs,
   type Alert,
   type DetectionEngines,
   type EngineMetrics,
@@ -17,6 +18,21 @@ const MAX_HISTORY = 24; // 24 samples x 5s  ≈ 2 min rolling trend (was 5 min)
 const ACTIVE_WINDOW_MS = 20000; // a source is ACTIVE while traffic is seen within 20s
 const STOPPED_PRUNE_MS = 10 * 60 * 1000; // drop ended sources after 10 min
 const MAX_TOASTS = 5;
+
+// Backend timestamps are naive UTC ISO strings — lexicographic order is the
+// correct chronological order, so sort errors can't break "recent first".
+function sortByFreshness(list: Alert[]): Alert[] {
+  return [...list].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+}
+/** Per-endpoint ceiling so one hung upstream socket can't stall the batch. */
+const FETCH_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("request timed out")), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
 
 /** Alert IDs we have already surfaced — polling baselines never re-toast. */
 const seenIds = new Set<string>();
@@ -114,14 +130,25 @@ const pushHistory = (
   return [...s.history, { t, flows, packets, alerts }].slice(-MAX_HISTORY);
 };
 
+// Per-source set of distinct alert ids already counted, so pulses (WS re-broadcast
+// of the same alert with a refreshed timestamp) don't inflate alertCount, while the
+// first alert of an attack always lands on the "Active threat sources" panel.
+const countedAlerts = new Map<string, Set<string>>();
+
 function bumpSource(
   list: SourceActivity[],
   ip: string,
   fields: Partial<Pick<SourceActivity, "proto" | "dst" | "threat" | "severity">>,
-  ts: number
+  ts: number,
+  alertId?: string | null
 ): SourceActivity[] {
   const idx = list.findIndex((x) => x.ip === ip);
   if (idx < 0) {
+    if (alertId) {
+      const seen = countedAlerts.get(ip) ?? new Set<string>();
+      seen.add(alertId);
+      countedAlerts.set(ip, seen);
+    }
     return [
       {
         ip,
@@ -133,24 +160,34 @@ function bumpSource(
         lastSeen: ts,
         active: true,
         endedAt: null,
-        alertCount: 0,
+        alertCount: alertId ? 1 : 0,
       },
       ...list,
     ];
   }
   const cur = list[idx];
-  if (cur.lastSeen === ts) return list;
+  const isNewAlert = !!alertId && !(countedAlerts.get(ip)?.has(alertId) ?? false);
+  if (ts >= cur.firstSeen && ts <= cur.lastSeen && !isNewAlert) return list;
+  if (alertId) {
+    const seen = countedAlerts.get(ip) ?? new Set<string>();
+    seen.add(alertId);
+    countedAlerts.set(ip, seen);
+  }
+  // A source that already ENDED and now attacks again must restart its live
+  // window — otherwise "active {duration}" keeps counting the OLD attack's age
+  // (a repeat offender looks "live for 45m" the instant the new attack starts).
+  const revived = !cur.active && cur.endedAt !== null;
   const next: SourceActivity = {
     ...cur,
     proto: fields.proto ?? cur.proto,
     dst: fields.dst ?? cur.dst,
     threat: fields.threat ?? cur.threat,
     severity: fields.severity ?? cur.severity,
-    lastSeen: ts,
+    firstSeen: revived ? ts : Math.min(cur.firstSeen, ts),
+    lastSeen: revived ? ts : Math.max(cur.lastSeen, ts),
     active: true,
     endedAt: null,
-    alertCount:
-      fields.threat && cur.threat !== fields.threat ? cur.alertCount + 1 : cur.alertCount,
+    alertCount: revived ? (isNewAlert ? 1 : 0) : cur.alertCount + (isNewAlert ? 1 : 0),
   };
   const copy = list.slice();
   copy[idx] = next;
@@ -170,10 +207,12 @@ function sourcesFromAlertsAndFlows(
       dst: a.dst_ip,
       threat: a.threat_type,
       severity: a.severity,
-    }, now);
+    }, parseApiTs(a.timestamp).getTime(), a.alert_id);
   }
   for (const f of flows) {
-    sources = bumpSource(sources, f.src_ip, { proto: f.protocol, dst: f.dst_ip }, now);
+    // Flow timestamps are epoch SECONDS; convert before bumping.
+    const ts = f.last_seen ? f.last_seen * 1000 : now;
+    sources = bumpSource(sources, f.src_ip, { proto: f.protocol, dst: f.dst_ip }, ts);
   }
   return sources;
 }
@@ -217,12 +256,12 @@ export const useEngine = create<EngineState>((set, get) => ({
     try {
       const [alerts, stats, metrics, trafficMetrics, engine, flows] =
         await Promise.allSettled([
-          api.alerts(),
-          api.trafficStats(),
-          api.metrics(),
-          api.trafficMetrics(),
-          api.engineMetrics(),
-          api.flows(),
+          withTimeout(api.alerts(), FETCH_TIMEOUT_MS),
+          withTimeout(api.trafficStats(), FETCH_TIMEOUT_MS),
+          withTimeout(api.metrics(), FETCH_TIMEOUT_MS),
+          withTimeout(api.trafficMetrics(), FETCH_TIMEOUT_MS),
+          withTimeout(api.engineMetrics(), FETCH_TIMEOUT_MS),
+          withTimeout(api.flows(), FETCH_TIMEOUT_MS),
         ]);
       const results = [alerts, stats, metrics, trafficMetrics, engine, flows];
       const ok = results.filter((r) => r.status === "fulfilled").length;
@@ -234,7 +273,7 @@ export const useEngine = create<EngineState>((set, get) => ({
         error: ok === 0 ? "Backend engine unreachable" : null,
       };
       if (alerts.status === "fulfilled") {
-        const list = alerts.value.alerts.slice(0, MAX_ALERTS);
+        const list = sortByFreshness(alerts.value.alerts).slice(0, MAX_ALERTS);
         const fresh = markNew(list);
         patch.alerts = list;
         if (fresh.length) {
@@ -275,7 +314,7 @@ export const useEngine = create<EngineState>((set, get) => ({
   refreshAlerts: async () => {
     try {
       const resp = await api.alerts();
-      const list = resp.alerts.slice(0, MAX_ALERTS);
+      const list = sortByFreshness(resp.alerts).slice(0, MAX_ALERTS);
       const fresh = markNew(list);
       set((s) => ({
         alerts: list,
@@ -308,15 +347,17 @@ export const useEngine = create<EngineState>((set, get) => ({
     const isNew = !seenIds.has(key);
     if (isNew && key) seenIds.add(key);
     set((s) => {
-      const alerts = isNew
-        ? [alert, ...s.alerts.filter((a) => a.alert_id !== key)].slice(0, MAX_ALERTS)
-        : s.alerts.map((a) => (a.alert_id === key ? alert : a));
+      const alerts = sortByFreshness(
+        isNew
+          ? [alert, ...s.alerts.filter((a) => a.alert_id !== key)].slice(0, MAX_ALERTS)
+          : s.alerts.map((a) => (a.alert_id === key ? alert : a))
+      );
       const sources = bumpSource(s.sources, alert.src_ip, {
         proto: alert.protocol ?? undefined,
         dst: alert.dst_ip,
         threat: alert.threat_type,
         severity: alert.severity,
-      }, Date.now());
+      }, parseApiTs(alert.timestamp).getTime(), alert.alert_id);
       const patch: Partial<EngineState> = { alerts, sources };
       if (isNew && via === "ws") {
         patch.toasts = [...s.toasts, makeAlertToast(alert)].slice(-MAX_TOASTS);
@@ -328,7 +369,7 @@ export const useEngine = create<EngineState>((set, get) => ({
   absorbAlerts: (list) => {
     list.forEach((a) => a.alert_id && seenIds.add(a.alert_id));
     set((s) => ({
-      alerts: list.slice(0, MAX_ALERTS),
+      alerts: sortByFreshness(list).slice(0, MAX_ALERTS),
       sources: sourcesFromAlertsAndFlows(s.sources, list, s.flows),
     }));
   },

@@ -1,3 +1,4 @@
+import asyncio
 import os
 from pathlib import Path
 
@@ -63,60 +64,110 @@ async def packets(
     file: str = Query("active/current.pcap"),
     limit: int = Query(200, ge=1, le=2000),
     offset: int = Query(0, ge=0),
+    q: str = Query("", description="Free-text filter across IP/port/info"),
+    src: str = Query("", description="Exact source IP match"),
+    dst: str = Query("", description="Exact destination IP match"),
+    proto: str = Query("", description="Protocol match: tcp|udp|icmp"),
+    sport: int | None = Query(None, ge=0, lt=65536),
+    dport: int | None = Query(None, ge=0, lt=65536),
 ) -> dict:
     if file == "active/current.pcap":
         path = flow_pcap_recorder.current_path()
     else:
         path = _allowed(file)
     if not path.exists() or path.stat().st_size == 0:
-        return {"total": 0, "packets": []}
+        return {"total": 0, "offset": offset, "limit": limit, "count": 0, "packets": []}
 
+    # Reading + parsing the capture (and decoding each frame) is CPU/IO-heavy
+    # and can block the event loop for hundreds of ms on large files. Run it in
+    # an executor so polling requests stay responsive during bursts.
+    return await asyncio.to_thread(
+        _read_and_filter_packets, str(path), limit, offset, q, src, dst, proto, sport, dport
+    )
+
+
+def _read_and_filter_packets(
+    path: str, limit: int, offset: int, q: str, src: str, dst: str,
+    proto: str, sport: int | None, dport: int | None,
+) -> dict:
     try:
-        from scapy.all import rdpcap, IP, TCP, UDP, ICMP
+        from scapy.all import PcapReader, IP, TCP, UDP, ICMP
     except ImportError:
-        return {"error": "scapy unavailable", "total": 0, "packets": []}
+        return {"error": "scapy unavailable", "total": 0, "offset": offset, "limit": limit, "count": 0, "packets": []}
 
+    query = q.strip().lower()
+    total = 0
+    page: list[dict] = []
     try:
-        packets = rdpcap(str(path))
+        with PcapReader(path) as reader:
+            # Live-append captures can end with a torn/partial packet (the
+            # recorder is mid-write while we read). One bad tail read must not
+            # fail the whole page — break and return what parsed fine.
+            while True:
+                try:
+                    pkt = next(reader)
+                except StopIteration:
+                    break
+                except (EOFError, RuntimeError, ValueError):
+                    break
+                entry = {
+                    "time": float(getattr(pkt, "time", 0.0)),
+                    "src": "-",
+                    "dst": "-",
+                    "proto": "?",
+                    "sport": None,
+                    "dport": None,
+                    "len": len(pkt),
+                    "flags": "",
+                    "summary": str(pkt.summary()),
+                }
+                if pkt.haslayer(IP):
+                    entry["src"] = pkt[IP].src
+                    entry["dst"] = pkt[IP].dst
+                    entry["proto"] = "tcp" if pkt.haslayer(TCP) else ("udp" if pkt.haslayer(UDP) else "icmp")
+                    if pkt.haslayer(TCP):
+                        entry["sport"] = pkt[TCP].sport
+                        entry["dport"] = pkt[TCP].dport
+                        entry["flags"] = str(pkt[TCP].flags)
+                    elif pkt.haslayer(UDP):
+                        entry["sport"] = pkt[UDP].sport
+                        entry["dport"] = pkt[UDP].dport
+
+                if src and entry["src"] != src:
+                    continue
+                if dst and entry["dst"] != dst:
+                    continue
+                if proto and entry["proto"] != proto:
+                    continue
+                if sport is not None and entry["sport"] != sport:
+                    continue
+                if dport is not None and entry["dport"] != dport:
+                    continue
+                if query:
+                    haystack = " ".join(str(entry[k]) for k in
+                                        ("src", "dst", "sport", "dport", "flags", "summary"))
+                    if query not in haystack.lower():
+                        continue
+
+                pos = total
+                total += 1
+                if offset <= pos < offset + limit:
+                    raw = bytes(pkt)
+                    entry["hex"] = raw.hex()
+                    entry["raw_len"] = len(raw)
+                    entry["decode"] = _decode_packet(pkt)
+                    entry["idx"] = pos
+                    page.append(entry)
     except Exception as exc:
         logger.warning("Failed to parse %s: %s", path, exc)
-        return {"error": str(exc), "total": 0, "packets": []}
+        return {"error": str(exc), "total": 0, "offset": offset, "limit": limit, "count": 0, "packets": []}
 
-    view = []
-    for pkt in packets[offset : offset + limit]:
-        entry = {
-            "time": float(getattr(pkt, "time", 0.0)),
-            "src": "-",
-            "dst": "-",
-            "proto": "?",
-            "sport": None,
-            "dport": None,
-            "len": len(pkt),
-            "flags": "",
-            "summary": str(pkt.summary()),
-        }
-        if pkt.haslayer(IP):
-            entry["src"] = pkt[IP].src
-            entry["dst"] = pkt[IP].dst
-            entry["proto"] = "tcp" if pkt.haslayer(TCP) else ("udp" if pkt.haslayer(UDP) else "icmp")
-            if pkt.haslayer(TCP):
-                entry["sport"] = pkt[TCP].sport
-                entry["dport"] = pkt[TCP].dport
-                entry["flags"] = str(pkt[TCP].flags)
-            elif pkt.haslayer(UDP):
-                entry["sport"] = pkt[UDP].sport
-                entry["dport"] = pkt[UDP].dport
-        raw = bytes(pkt)
-        entry["hex"] = raw.hex()
-        entry["raw_len"] = len(raw)
-        entry["decode"] = _decode_packet(pkt)
-        view.append(entry)
     return {
-        "total": len(packets),
+        "total": total,
         "offset": offset,
         "limit": limit,
-        "count": len(view),
-        "packets": view,
+        "count": len(page),
+        "packets": page,
     }
 
 

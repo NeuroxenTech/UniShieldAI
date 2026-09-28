@@ -5,6 +5,7 @@ import {
   Download,
   Network,
   ScanSearch,
+  SearchX,
   ShieldAlert,
 } from "lucide-react";
 import {
@@ -107,7 +108,11 @@ export default function Investigation() {
         subtitle={
           alert
             ? `${severityMeta(alert.severity).label} severity · risk ${Math.round(alert.risk_score * 100)}% · confidence ${Math.round(alert.confidence * 100)}% · ${tm.blurb}`
-            : "Live evidence evidence collector"
+            : loading
+              ? "Loading alert evidence…"
+              : error
+                ? "This alert could not be loaded."
+                : "Select an alert to inspect its evidence and raw packet capture."
         }
         actions={
           <Link
@@ -129,11 +134,20 @@ export default function Investigation() {
           ))}
         </div>
       ) : error ? (
-        <EmptyState
-          mode="offline"
-          title="Could not load alert"
-          hint={`Backend response: ${error}. Check the alert_id and try again.`}
-        />
+        error.startsWith("404") ? (
+          <EmptyState
+            mode="empty"
+            icon={SearchX}
+            title="Alert no longer available"
+            hint="This alert lived in the engine's live session or audit DB and has since been cleared (e.g. the backend was restarted or the alert was cleaned). Return to Alerts to see current detections."
+          />
+        ) : (
+          <EmptyState
+            mode="offline"
+            title="Could not load alert"
+            hint={`Backend response: ${error}.`}
+          />
+        )
       ) : alert ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left column: threat + evidence */}

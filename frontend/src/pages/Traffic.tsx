@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Search, Waves, ArrowDownUp } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, Waves, ArrowDownUp, ScanLine } from "lucide-react";
 import { PageHeader } from "../components/layout/PageHeader";
 import { Card } from "../components/ui/Card";
 import { EmptyState } from "../components/alerts/EmptyState";
@@ -171,7 +172,7 @@ export default function Traffic() {
               <span className="text-right">Packets · Bytes</span>
               <span className="text-center">TCP flags</span>
               <span>Periodicity</span>
-              <span className="text-right">Age</span>
+              <span className="text-right">Age · Inspect</span>
             </div>
             {filtered.map((f) => (
               <Row key={f.flow_id} flow={f} />
@@ -184,10 +185,24 @@ export default function Traffic() {
 }
 
 function Row({ flow }: { flow: FlowRow }) {
+  const navigate = useNavigate();
+  const params = new URLSearchParams({
+    src: flow.src_ip,
+    dst: flow.dst_ip,
+    proto: flow.protocol,
+    file: "active/current.pcap",
+  });
+  if (flow.src_port != null) params.set("sport", String(flow.src_port));
+  if (flow.dst_port != null) params.set("dport", String(flow.dst_port));
+
   return (
     <div
-      className="grid grid-cols-[110px_1fr_120px_110px_1fr_150px] gap-3 items-center px-4 min-h-[46px] border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors"
-      title={`Flow ${flow.flow_id}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => navigate(`/packets?${params.toString()}`)}
+      onKeyDown={(e) => e.key === "Enter" && navigate(`/packets?${params.toString()}`)}
+      className="grid grid-cols-[110px_1fr_120px_110px_1fr_150px] gap-3 items-center px-4 min-h-[46px] border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors cursor-pointer"
+      title={`Flow ${flow.flow_id} — open in Packet Inspector`}
     >
       <span className="flex items-center gap-2 font-mono text-[11px] text-[#64748B] truncate" title={flow.flow_id}>
         <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8]/70 shrink-0" />
@@ -218,6 +233,7 @@ function Row({ flow }: { flow: FlowRow }) {
         <span className="text-[11px] text-[#64748B] tabular-nums whitespace-nowrap">
           {age(flow.age_sec)}
         </span>
+        <ScanLine size={14} className="text-[#7C5CFC]/70 shrink-0" aria-label="Inspect packets" />
       </span>
     </div>
   );

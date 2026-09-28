@@ -3,6 +3,7 @@ import asyncio
 from app.alerts.manager import AlertManager
 from app.capture.flow_pcap import flow_pcap_recorder
 from app.core.config import settings
+from app.core.constants import ThreatType
 from app.core.logging import get_logger
 from app.decision.engine import DecisionEngine, decision_engine
 from app.features.extractor import FeatureExtractor
@@ -17,6 +18,15 @@ from app.utils.hashing import flow_hash
 from app.utils.metrics import runtime_metrics
 
 logger = get_logger("unishield.pipeline")
+
+
+def _record_pcap(record: FlowRecord) -> None:
+    flow_pcap_recorder.record(
+        record.src_ip, record.dst_ip, record.protocol,
+        record.src_port, record.dst_port, record.byte_count,
+        syn=record.syn_count, ack=record.ack_count,
+        rst=record.rst_count, fin=record.fin_count,
+    )
 
 
 class DetectionPipeline:
@@ -94,12 +104,10 @@ class DetectionPipeline:
         runtime_metrics.record_flow()
         record_flow()
         record_packet(record.byte_count)
-        flow_pcap_recorder.record(
-            record.src_ip, record.dst_ip, record.protocol,
-            record.src_port, record.dst_port, record.byte_count,
-            syn=record.syn_count, ack=record.ack_count,
-            rst=record.rst_count, fin=record.fin_count,
-        )
+        # Pcap write + rotation does file I/O (and copies the whole buffer on
+        # rotate) — keep it off the event loop so HTTP/WS stay responsive under
+        # bursts. flow_pcap_recorder already serializes with its own lock.
+        await asyncio.to_thread(_record_pcap, record)
 
         entry = self.flow_state.get_or_create(
             flow_id,
@@ -130,6 +138,28 @@ class DetectionPipeline:
             packet_size=record.byte_count,
         )
 
+        # When the sensor captures bidirectional lab traffic, both the
+        # attacker's probe (A→B with SYN) and the sensor's response
+        # (B→A with RST/ACK) arrive as separate flow records.  The
+        # response direction must not generate its own threat alert
+        # (it would misfire as port_scan/reconnaissance/c2 from the
+        # sensor's perspective).  Skip detection if this record carries
+        # no SYN and either (a) it is an RST-only TCP reply — the sensor
+        # answering a probe it has no listener for — or (b) the reverse
+        # flow already exists in flow_state (i.e. it is the responding
+        # half of an existing connection).  (b) alone is racy under
+        # parallel consumers: the RST can be processed before its probe's
+        # flow lands, so (a) catches the RST-only case unconditionally.
+        reverse_id = flow_hash(
+            record.dst_ip, record.src_ip,
+            record.dst_port, record.src_port, record.protocol,
+        )
+        if not record.syn_count and (
+            (record.protocol.lower() == "tcp" and record.rst_count)
+            or self.flow_state.get(reverse_id) is not None
+        ):
+            return {"flow_id": flow_id, "skipped": "response_flow"}
+
         features = self.extractor.extract_from_entry(entry, dns_query=record.dns_query)
         if record.tls_ja3:
             features.tls_ja3 = record.tls_ja3
@@ -138,10 +168,27 @@ class DetectionPipeline:
         if rule_assessment["matched_rule_count"]:
             runtime_metrics.rules_fired += 1
 
-        ml_assessment = await asyncio.to_thread(self.ml.inference.run, features.model_dump())
-        runtime_metrics.ml_inferences += 1
+        # Fast path: a strong, discrete technique/fiood rule (ddos/dos/port_scan/
+        # c2/...) already identified the threat. Skip the expensive per-flow ML
+        # inference so a SYN flood can't saturate the queue (15/s with ML vs
+        # thousands/s rules-only) and bury every other scenario mid-flood.
+        # Volume-only labels still run the full pipeline.
+        fast_ml = any(
+            match.score >= 0.70 and match.threat_type != ThreatType.SUSPICIOUS_TRAFFIC
+            for match in rule_assessment["matches"]
+        )
+        ml_assessment = (
+            {}
+            if fast_ml
+            else await asyncio.to_thread(self.ml.inference.run, features.model_dump())
+        )
+        if ml_assessment:
+            runtime_metrics.ml_inferences += 1
 
-        decision = self.decision.decide(flow_id, rule_assessment, ml_assessment)
+        decision = self.decision.decide(
+            flow_id, rule_assessment, ml_assessment,
+            dst_ip=record.dst_ip, src_ip=record.src_ip,
+        )
 
         result = {
             "flow_id": flow_id,
@@ -181,6 +228,8 @@ class DetectionPipeline:
             )
             if forever:
                 self.alert_manager.set_pcap_path(alert.alert_id, str(forever))
+                from app.db.persist import update_alert_pcap_path
+                await update_alert_pcap_path(alert.alert_id, str(forever))
         except Exception:
             logger.exception("Evidence preservation failed")
 

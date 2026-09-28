@@ -51,7 +51,13 @@ class TestTrafficSource(FlowSourceBase):
         self._victim = INTERNAL_PREFIX.format(segment=10, host=20)
         self._brute_victim = INTERNAL_PREFIX.format(segment=10, host=21)
         self._compromised = INTERNAL_PREFIX.format(segment=10, host=30)
-        self._c2_server = f"233.51.{self._rng.randint(1, 254)}.{self._rng.randint(2, 254)}"
+        # Public unicast C2 endpoint. 233.x and similar multicast/224/4
+        # addresses are broadcast-group noise, not a real server, and the
+        # classifier correctly refuses to label beaconing toward them.
+        first = self._rng.choice(
+            [o for o in range(1, 223) if o not in (10, 127, 172, 192)]
+        )
+        self._c2_server = f"{first}.{self._rng.randint(1, 254)}.{self._rng.randint(1, 254)}.{self._rng.randint(2, 254)}"
         self._scan_port = 1
         self._c2_port = self._rng.choice([443, 53, 8080])
         self._c2_src_port = self._rng.randint(1024, 65535)

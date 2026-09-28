@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     pcap_active_path: str = "captures/active/current.pcap"
     pcap_incidents_path: str = "captures/incidents"
     pcap_archive_path: str = "captures/archive"
-    pcap_max_bytes: int = 100 * 1024 * 1024
+    pcap_max_bytes: int = 1024 * 1024
     pcap_rotation_interval_sec: int = 300
 
     flow_timeout_sec: int = 120
@@ -44,8 +44,8 @@ class Settings(BaseSettings):
     dedup_window_sec: int = 300
 
     max_concurrent_flows: int = 10000
-    pipeline_queue_size: int = 50000
-    pipeline_consumers: int = 3
+    pipeline_queue_size: int = 200000
+    pipeline_consumers: int = 6
 
     netflow_udp_port: int = 2055
     netflow_udp_host: str = "0.0.0.0"

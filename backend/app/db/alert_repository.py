@@ -31,6 +31,18 @@ class AlertRepository:
         await self._session.refresh(record)
         return _to_schema(record)
 
+    async def set_pcap_path(self, alert_id: str, path: str) -> AlertOut | None:
+        result = await self._session.execute(
+            select(AlertRecord).where(AlertRecord.alert_id == alert_id)
+        )
+        record = result.scalar_one_or_none()
+        if record is None:
+            return None
+        record.pcap_path = path
+        await self._session.commit()
+        await self._session.refresh(record)
+        return _to_schema(record)
+
     async def get_recent(self, limit: int = 100) -> list[AlertOut]:
         result = await self._session.execute(
             select(AlertRecord).order_by(AlertRecord.timestamp.desc()).limit(limit)

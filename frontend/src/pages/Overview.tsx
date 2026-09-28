@@ -199,10 +199,11 @@ export default function Overview() {
                   {endedAttacks.slice(0, 6).map((s) => (
                     <span
                       key={s.ip}
-                      className="inline-flex items-center gap-1.5 px-2 h-[22px] rounded-md bg-white/[0.03] border border-white/[0.06] text-[10.5px] text-[#94A3B8] font-medium"
+                      className="inline-flex items-center gap-1.5 px-2 h-[22px] max-w-full min-w-0 rounded-md bg-white/[0.03] border border-white/[0.06] text-[10.5px] text-[#94A3B8] font-medium"
+                      title={s.ip}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-white/[0.2]" />
-                      <span className="font-mono">{s.ip}</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/[0.2] shrink-0" />
+                      <span className="font-mono truncate min-w-0">{s.ip}</span>
                       <span className="text-[#64748B]">
                         {threatMeta(s.threat).label}
                       </span>
@@ -453,7 +454,7 @@ function ThreatMatrix({ alerts }: { alerts: Alert[] }) {
                   boxShadow: count > 0 ? `0 0 6px ${sev.color}` : "none",
                 }}
               />
-              <span className="w-[130px] truncate text-[11.5px] text-[#CBD5E1] shrink-0">
+              <span className="w-[130px] min-w-0 truncate text-[11.5px] text-[#CBD5E1]">
                 {t.label}
               </span>
               <span className="w-3 text-right text-[10px] text-[#334155] shrink-0">
@@ -502,18 +503,28 @@ function AttackRow({ s }: { s: SourceActivity }) {
         style={{ background: meta.color, boxShadow: `0 0 8px ${meta.color}` }}
       />
       <span className="flex flex-col justify-center min-w-0 flex-1">
-        <span className="flex items-center gap-2 text-[12.5px] font-semibold text-white">
-          <span className="font-mono">{s.ip}</span>
-          <span className="text-[#475569]">→</span>
-          <span className="font-mono text-[#94A3B8]">{s.dst || "…"}</span>
+        <span
+          className="flex items-center gap-2 text-[12.5px] font-semibold text-white min-w-0"
+          title={`${s.ip} → ${s.dst || "…"}`}
+        >
+          <span className="font-mono shrink-0 min-w-0 max-w-[45%] truncate">{s.ip}</span>
+          <span className="text-[#475569] shrink-0">→</span>
+          <span className="font-mono text-[#94A3B8] min-w-0 truncate">{s.dst || "…"}</span>
         </span>
         <span className="text-[10.5px] text-[#64748B] truncate">
           {tmeta.label} · {s.alertCount} alert{s.alertCount === 1 ? "" : "s"}
         </span>
       </span>
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-[11px] text-[#CBD5E1] tabular-nums text-right">
-          active {fmtDur(Date.now() - (s.firstSeen || s.lastSeen))}
+      <div className="flex items-center gap-2 shrink-0 pl-1">
+        <span
+          className="text-[11px] text-[#CBD5E1] tabular-nums text-right whitespace-nowrap"
+          title={
+            Number.isFinite(s.lastSeen) && s.lastSeen > 0
+              ? `first signal ${new Date(Math.max(0, s.firstSeen)).toLocaleTimeString([], { hour12: false })} · last signal ${new Date(s.lastSeen).toLocaleTimeString([], { hour12: false })}`
+              : undefined
+          }
+        >
+          active {fmtDur(Math.max(0, Date.now() - (Number.isFinite(s.firstSeen) && s.firstSeen > 0 ? s.firstSeen : s.lastSeen)))}
         </span>
         <StatusChip live />
       </div>

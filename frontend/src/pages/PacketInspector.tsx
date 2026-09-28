@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FileSearch, RefreshCw, ChevronRight, Search, ChevronLeft, Inbox } from "lucide-react";
+import { FileSearch, RefreshCw, ChevronRight, Search, ChevronLeft, Inbox, CornerDownLeft } from "lucide-react";
 import { PageHeader } from "../components/layout/PageHeader";
 import { Card } from "../components/ui/Card";
 import { EmptyState } from "../components/alerts/EmptyState";
@@ -19,22 +19,55 @@ type ProtoFilter = "all" | "tcp" | "udp" | "icmp";
 const ACTIVE_FILE = "active/current.pcap";
 const PAGE_SIZES = [100, 200, 500, 1000];
 
+interface DeepLink {
+  src?: string;
+  dst?: string;
+  proto?: string;
+  sport?: number;
+  dport?: number;
+}
+
+function intOrUndef(v: string | null): number | undefined {
+  const n = Number(v);
+  return v && Number.isFinite(n) ? n : undefined;
+}
+
 export default function PacketInspector() {
   const [searchParams] = useSearchParams();
   const initialFile = searchParams.get("file");
+  const initialPacket = intOrUndef(searchParams.get("packet"));
   const initialView: View = searchParams.get("view") === "incidents" ? "incidents" : "active";
   const [view, setView] = useState<View>(initialView);
   const [active, setActive] = useState<ActiveCapture | null>(null);
   const [incidents, setIncidents] = useState<CaptureFile[]>([]);
   const [file, setFile] = useState<string>(initialFile ?? ACTIVE_FILE);
   const [limit, setLimit] = useState(200);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(() =>
+    initialPacket != null ? Math.max(0, Math.floor((initialPacket - 1) / 200)) : 0
+  );
   const [data, setData] = useState<CapturePacketsResponse | null>(null);
   const [selected, setSelected] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [protoFilter, setProtoFilter] = useState<ProtoFilter>("all");
+  const [deep, setDeep] = useState<DeepLink | null>(() => {
+    const s = searchParams.get("src") || searchParams.get("dst") ||
+      searchParams.get("proto") || searchParams.get("sport") || searchParams.get("dport");
+    if (!s) return null;
+    return {
+      src: searchParams.get("src") ?? undefined,
+      dst: searchParams.get("dst") ?? undefined,
+      proto: searchParams.get("proto") ?? undefined,
+      sport: intOrUndef(searchParams.get("sport")),
+      dport: intOrUndef(searchParams.get("dport")),
+    };
+  });
+  const [pendingIdx, setPendingIdx] = useState<number | null>(
+    initialPacket != null ? initialPacket - 1 : null
+  );
+  const [pendingDeep, setPendingDeep] = useState<boolean>(deep != null && initialPacket == null);
+  const [jump, setJump] = useState("");
 
   const refreshFiles = useCallback(async () => {
     try {
@@ -53,13 +86,20 @@ export default function PacketInspector() {
   }, [refreshFiles]);
 
   const loadPackets = useCallback(
-    async (target: string, pageNo: number, size: number) => {
+    async (target: string, pageNo: number, size: number, keep?: boolean) => {
       setBusy(true);
       setError(null);
       try {
-        const res = await api.capturePackets(target, size, pageNo * size);
+        const res = await api.capturePackets(target, size, pageNo * size, {
+          q: q.trim() || undefined,
+          src: deep?.src,
+          dst: deep?.dst,
+          proto: deep?.proto ?? (protoFilter === "all" ? undefined : protoFilter),
+          sport: deep?.sport,
+          dport: deep?.dport,
+        });
         setData(res);
-        setSelected(0);
+        setSelected((sel) => (keep && res.packets[sel] ? sel : 0));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load packets");
         setData(null);
@@ -67,20 +107,93 @@ export default function PacketInspector() {
         setBusy(false);
       }
     },
-    []
+    [q, protoFilter, deep]
   );
 
   useEffect(() => {
     loadPackets(file, page, limit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file, page, limit]);
+  }, [file, page, limit, q, protoFilter, deep]);
+
+  // Live mode: while viewing the live buffer with no search/proto filter
+  // active, keep the packet list self-refreshing like a live Wireshark view.
+  const busyRef = useRef(false);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+  const autoLive =
+    view === "active" && file === ACTIVE_FILE && !q && protoFilter === "all" && !deep;
+  useEffect(() => {
+    if (!autoLive) return;
+    const t = window.setInterval(() => {
+      if (!busyRef.current) loadPackets(file, page, limit, true);
+    }, 5000);
+    return () => window.clearInterval(t);
+  }, [autoLive, file, page, limit, loadPackets]);
+
+  // After a page arrives: land on the requested packet (deep-linked flow or
+  // jump-to-#). It may live on another page — jump there and re-select.
+  useEffect(() => {
+    if (!data) return;
+    if (pendingIdx != null) {
+      const pos = data.packets.findIndex((p) => p.idx === pendingIdx);
+      if (pos >= 0) {
+        setSelected(pos);
+        setPendingIdx(null);
+        return;
+      }
+      const targetPage = Math.max(0, Math.floor(pendingIdx / limit));
+      if (targetPage !== page) {
+        setPage(targetPage);
+      } else {
+        setPendingIdx(null);
+        setSelected(0);
+      }
+      return;
+    }
+    if (pendingDeep && data.offset === 0) {
+      const first = data.packets[0];
+      setPendingDeep(false);
+      if (first && first.idx != null && first.idx >= limit) {
+        setPendingIdx(first.idx);
+      } else {
+        setSelected(0);
+      }
+    }
+  }, [data, pendingIdx, pendingDeep, limit, page]);
 
   const pickFile = (name: string) => {
     setSelected(0);
     setPage(0);
     setQ("");
     setProtoFilter("all");
+    setDeep(null);
+    setPendingIdx(null);
+    setPendingDeep(false);
     setFile(name);
+  };
+
+  const onSearch = (v: string) => {
+    setQ(v);
+    setDeep(null);
+    setPage(0);
+    setPendingIdx(null);
+  };
+
+  const onProto = (p: ProtoFilter) => {
+    setProtoFilter(p);
+    setDeep(null);
+    setPage(0);
+    setPendingIdx(null);
+  };
+
+  const goToPacket = () => {
+    const n = parseInt(jump, 10);
+    if (!Number.isFinite(n) || n < 1) return;
+    const idx = n - 1;
+    setPendingIdx(idx);
+    setPage(Math.max(0, Math.floor(idx / limit)));
+    setJump("");
   };
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / limit)) : 1;
@@ -93,27 +206,18 @@ export default function PacketInspector() {
     return s;
   }, [data]);
 
-  const filtered = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    return (data?.packets ?? [])
-      .map((pkt, idx) => ({ idx, pkt }))
-      .filter(({ pkt }) => {
-        if (protoFilter !== "all" && pkt.proto !== protoFilter) return false;
-        if (!query) return true;
-        return (
-          pkt.src.toLowerCase().includes(query) ||
-          pkt.dst.toLowerCase().includes(query) ||
-          `${pkt.src}:${pkt.sport ?? ""}`.toLowerCase().includes(query) ||
-          `${pkt.dst}:${pkt.dport ?? ""}`.toLowerCase().includes(query) ||
-          (pkt.summary ?? "").toLowerCase().includes(query) ||
-          pkt.flags.toLowerCase().includes(query)
-        );
-      });
-  }, [data, q, protoFilter]);
-
   const packet = data && selected != null ? data.packets[selected] ?? null : null;
 
   const showOffset = data ? data.offset : 0;
+
+  const loadedInfo =
+    view === "active"
+      ? `current.pcap${active?.mtime
+          ? ` · ${fmtBytes(active.size)} · updated ${new Date(active.mtime * 1000).toLocaleTimeString()}`
+          : ""}`
+      : (incidents.find((x) => x.path.replace(/^captures\//, "") === file)?.name ??
+          file.split("/").pop() ??
+          file);
 
   return (
     <div className="p-5 md:p-6 max-w-[1500px] mx-auto">
@@ -223,19 +327,19 @@ export default function PacketInspector() {
               </div>
             )}
 
-            {/* Filters */}
+            {/* Filters — applied across ALL packets before paging */}
             <div className="border-t border-white/[0.06] pt-3 flex flex-col gap-2.5">
               <p className="text-[10px] uppercase tracking-[0.14em] text-[#475569]">
-                Filter this page
+                Search capture
               </p>
               <div className="flex items-center gap-2 h-9 px-3 rounded-lg bg-white/[0.03] border border-white/[0.08] focus-within:border-[#7C5CFC]/50 transition-colors">
                 <Search size={13} className="text-[#64748B] shrink-0" strokeWidth={2} />
                 <input
                   value={q}
-                  onChange={(e) => setQ(e.target.value)}
+                  onChange={(e) => onSearch(e.target.value)}
                   placeholder="IP, port, flags, info…"
                   className="bg-transparent border-none outline-none text-[12.5px] text-white placeholder:text-[#475569] flex-1 min-w-0"
-                  aria-label="Filter packets"
+                  aria-label="Search all packets"
                 />
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -243,7 +347,7 @@ export default function PacketInspector() {
                   <button
                     key={p}
                     type="button"
-                    onClick={() => setProtoFilter(p)}
+                    onClick={() => onProto(p)}
                     className={cn(
                       "px-2.5 h-7 rounded-md text-[11px] font-semibold uppercase tracking-wider transition-colors",
                       protoFilter === p
@@ -256,18 +360,21 @@ export default function PacketInspector() {
                   </button>
                 ))}
               </div>
-              {(q || protoFilter !== "all") && filtered.length >= 0 && (
+              {(q || protoFilter !== "all" || deep) && data && (
                 <div className="flex items-center justify-between text-[11px] text-[#64748B]">
-                  <span>
-                    {filtered.length} of {data?.packets.length ?? 0} shown
+                  <span className="truncate">
+                    {data.total} {data.total === 1 ? "packet" : "packets"} match
                   </span>
                   <button
                     type="button"
                     onClick={() => {
                       setQ("");
                       setProtoFilter("all");
+                      setDeep(null);
+                      setPage(0);
+                      setPendingIdx(null);
                     }}
-                    className="text-[#A78BFA] hover:text-[#C4B5FD] font-medium"
+                    className="text-[#A78BFA] hover:text-[#C4B5FD] font-medium shrink-0 ml-2"
                   >
                     Reset
                   </button>
@@ -295,6 +402,25 @@ export default function PacketInspector() {
                   ))}
                 </select>
               </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={jump}
+                  onChange={(e) => setJump(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && goToPacket()}
+                  inputMode="numeric"
+                  placeholder="Go to #"
+                  aria-label="Jump to packet number"
+                  className="w-24 h-8 px-2 rounded-lg text-[11.5px] bg-white/[0.03] border border-white/[0.08] text-[#CBD5E1] placeholder:text-[#475569] outline-none focus:border-[#7C5CFC]/50"
+                />
+                <button
+                  type="button"
+                  onClick={goToPacket}
+                  className="inline-flex items-center gap-1 h-8 px-2 rounded-lg text-[11.5px] font-medium text-[#94A3B8] bg-white/[0.03] border border-white/[0.07] hover:text-white transition-colors"
+                  aria-label="Go to packet"
+                >
+                  <CornerDownLeft size={13} />
+                </button>
+              </div>
             </div>
             <div className="flex items-center justify-between gap-2">
               <button
@@ -326,8 +452,19 @@ export default function PacketInspector() {
             title="Packets"
             subtitle={
               data
-                ? `${fmtNumber(data.total)} total · ${showOffset + 1}–${showOffset + data.packets.length} on this page`
+                ? `${loadedInfo} · ${fmtNumber(data.total)} total · rows ${showOffset + 1}–${showOffset + data.packets.length}`
                 : "Loading capture — pick a source on the left"
+            }
+            action={
+              autoLive && data ? (
+                <span
+                  className="inline-flex items-center gap-1.5 text-[10.5px] font-semibold text-[#6BCB77] tracking-wide"
+                  title="Auto-refreshing the live buffer every 5s — pause by searching or switching source"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#6BCB77] live-source animate-pulse" />
+                  LIVE · 5s
+                </span>
+              ) : undefined
             }
           >
             {error ? (
@@ -343,11 +480,21 @@ export default function PacketInspector() {
               </div>
             ) : data.packets.length === 0 ? (
               <div className="py-10">
-                <EmptyState mode="empty" icon={Inbox} title="No packets in this capture" hint="The selected capture has no recorded packets yet." />
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="py-10">
-                <EmptyState mode="empty" icon={Search} title="No packets match the filters" hint="Clear the search text or protocol filter to see all packets on this page." />
+                {autoLive ? (
+                  <EmptyState
+                    mode="empty"
+                    icon={Inbox}
+                    title="Waiting for live capture"
+                    hint="No packets recorded in the live buffer yet — frames appear here automatically as the engine captures them."
+                  />
+                ) : (
+                  <EmptyState
+                    mode="empty"
+                    icon={Inbox}
+                    title="No packets match"
+                    hint="The capture has no recorded packets for these filters yet."
+                  />
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto overflow-y-auto max-h-[46vh] -mx-5 -mb-5">
@@ -365,7 +512,7 @@ export default function PacketInspector() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map(({ pkt, idx }) => (
+                    {data.packets.map((pkt, idx) => (
                       <tr
                         key={idx}
                         onClick={() => setSelected(idx)}
@@ -461,7 +608,7 @@ function PacketDecode({ packet }: { packet: CapturePacket }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
       {/* Decoded tree */}
-      <div className="text-[12px] leading-relaxed">
+      <div className="min-w-0 text-[12px] leading-relaxed">
         <TreeLabel label={`Frame ${packet.len} bytes (Ethernet + IP)`} depth={0} open>
           {decode?.ip && (
             <>
@@ -566,7 +713,7 @@ function TreeKV({ k, v, depth }: { k: string; v: string; depth: number }) {
 }
 
 function protoName(n: number): string {
-  return ["", "icmp", "", "", "", "", "tcp", "", "", "", "", "", "", "", "", "", ""][n] ?? String(n);
+  return ["", "icmp", "", "", "", "", "tcp", "", "", "", "", "", "", "", "", ""][n] ?? String(n);
 }
 
 function HexDump({ hex, len }: { hex: string; len: number }) {
@@ -591,7 +738,7 @@ function HexDump({ hex, len }: { hex: string; len: number }) {
   }, [hex]);
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-white/[0.06] bg-[#0B0B17]">
+    <div className="min-w-0 overflow-x-auto rounded-lg border border-white/[0.06] bg-[#0B0B17]">
       <div className="flex items-center justify-between px-2.5 py-2 border-b border-white/[0.05]">
         <p className="text-[11px] uppercase tracking-[0.12em] text-[#475569]">
           Raw bytes {hex ? `(${hex.length / 2} B)` : ""}

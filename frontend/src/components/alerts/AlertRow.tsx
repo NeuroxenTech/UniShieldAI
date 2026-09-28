@@ -5,6 +5,7 @@ import { SeverityBadge } from "./SeverityBadge";
 import { threatMeta } from "../../lib/threats";
 import { formatNumber, timeAgo } from "../../lib/api";
 import { cn } from "../../lib/cn";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 
 export function FlowPair({
   src,
@@ -52,6 +53,7 @@ export function AlertRow({
 }) {
   const meta = threatMeta(alert.threat_type);
   const conf = typeof alert.confidence === "number" ? Math.round(alert.confidence * 100) : null;
+  const showFlow = useMediaQuery("(min-width: 1280px)");
   return (
     <Link
       to={`/investigation/${alert.alert_id}`}
@@ -78,7 +80,7 @@ export function AlertRow({
         srcPort={alert.src_port}
         dstPort={alert.dst_port}
         protocol={alert.protocol}
-        className="hidden xl:inline-flex min-w-0 truncate"
+        className={`${showFlow ? "flex-1 " : "hidden "}min-w-0 truncate`}
       />
       {conf != null && (
         <span
