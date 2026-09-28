@@ -3,8 +3,8 @@ import {
   LayoutGrid,
   ShieldAlert,
   Activity,
+  ScanSearch,
   Cpu,
-  Info,
   ChevronsLeft,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
@@ -12,31 +12,51 @@ import { Logo } from "../brand/Logo";
 import { useEngine } from "../../store/engine";
 
 const navItems = [
-  { label: "Security Overview", path: "/", icon: LayoutGrid },
+  { label: "SOC Overview", path: "/", icon: LayoutGrid },
   { label: "Alerts", path: "/alerts", icon: ShieldAlert, badge: true },
   { label: "Live Traffic", path: "/traffic", icon: Activity },
+  { label: "Packet Inspector", path: "/packets", icon: ScanSearch },
   { label: "Detection Engine", path: "/engine", icon: Cpu },
-  { label: "About · PS", path: "/about", icon: Info },
 ];
 
-function AlertBadge() {
+function AlertBadge({ expanded }: { expanded: boolean }) {
   const alerts = useEngine((s) => s.alerts);
   const open = alerts.filter(
     (a) => a.status !== "resolved" && a.status !== "ignored"
   ).length;
   if (open === 0) return null;
   const critical = alerts.some((a) => a.severity === "critical");
+  const title = `${open} open alerts`;
+
+  if (!expanded) {
+    // Collapsed rail: a tiny glowing dot keeps attention without overlap.
+    return (
+      <span
+        className={cn(
+          "hidden md:inline-flex absolute top-1 right-1 h-[7px] w-[7px] rounded-full",
+          critical
+            ? "bg-[#FF4D6A] shadow-[0_0_8px_rgba(255,77,106,0.9)] animate-pulse"
+            : "bg-[#A78BFA] shadow-[0_0_6px_rgba(167,139,250,0.8)]"
+        )}
+        title={title}
+        aria-label={title}
+      />
+    );
+  }
+
+  const shown = open > 99 ? "99+" : String(open);
   return (
     <span
       className={cn(
-        "hidden md:inline-flex items-center h-5 min-w-5 px-1.5 rounded-full text-[10px] font-bold ml-auto",
+        "hidden md:inline-flex items-center justify-center h-[18px] min-w-[21px] px-1.5 ml-auto rounded-full text-[10px] font-bold tabular-nums leading-none whitespace-nowrap border",
         critical
-          ? "bg-[#FF4D6A]/20 text-[#FF8CA0] border border-[#FF4D6A]/40"
-          : "bg-white/[0.08] text-[#94A3B8] border border-white/[0.1]"
+          ? "bg-gradient-to-r from-[#FF4D6A] to-[#FF7A45] text-white border-white/25 shadow-[0_0_12px_rgba(255,77,106,0.45)]"
+          : "bg-gradient-to-r from-[#7C5CFC] to-[#A78BFA] text-white border-white/20 shadow-[0_0_10px_rgba(139,92,246,0.4)]"
       )}
-      title={`${open} open alerts`}
+      title={title}
+      aria-label={title}
     >
-      {open}
+      {shown}
     </span>
   );
 }
@@ -100,7 +120,7 @@ function NavLinkButton({
             >
               {label}
             </span>
-            {badge && <AlertBadge />}
+            {badge && <AlertBadge expanded={expanded} />}
           </>
         )}
       </NavLink>

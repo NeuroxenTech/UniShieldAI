@@ -26,7 +26,7 @@ test.describe("Security Alerts Page", () => {
   test("severity and confidence rendering or a clear empty/offline state", async ({ page }) => {
     const row = page.locator('a[href^="/investigation/"]').first();
     const empty = page.getByText("No alerts yet", { exact: false });
-    const offline = page.getByText("Backend engine not reachable", { exact: false });
+    const offline = page.getByText(/not reachable/);
     await row.or(empty).first().waitFor({ state: "visible" });
 
     if (await row.isVisible()) {

@@ -1,0 +1,8 @@
+# Runtime artifacts
+unishield.db
+unishield.db-journal
+backend/unishield.db
+backend/unishield.db-journal
+
+# Internal prep docs (never commit)
+docs/Presentation-Prep.md

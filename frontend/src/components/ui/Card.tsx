@@ -19,7 +19,7 @@ export function Card({
   headerClassName,
 }: CardProps) {
   return (
-    <div className={cn("glass-panel glass-hover", className)}>
+    <div className={cn("glass-panel glass-hover min-w-0", className)}>
       {(title || action) && (
         <div
           className={cn(

@@ -36,6 +36,12 @@ class FlowFeatures(BaseModel):
     # these feed rule detection and alert evidence only.
     source_entropy: float = 0.0
     udp_amp_ratio: float = 0.0
+    # Recent connection-establishment rate for THIS specific destination port
+    # (windowed like connection_frequency). Distinct from the pair-wide
+    # connection_frequency so a brute force to :22 isn't drowned by a port scan
+    # that also ran against the same host — the attacker's attempts hammer ONE
+    # auth port, the scan touches many.
+    dst_port_conn_freq: float = 0.0
     tls_ja3: Optional[str] = None
     tls_ja3s: Optional[str] = None
 

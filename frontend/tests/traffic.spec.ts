@@ -20,7 +20,7 @@ test.describe("Live Traffic Flows Page", () => {
   });
 
   test("shows an offline or empty or populated flow table", async ({ page }) => {
-    const offline = page.getByText("Backend engine not reachable", { exact: false });
+    const offline = page.getByText(/not reachable/);
     const empty = page.getByText("No active flows", { exact: false });
     const proto = page.getByRole("button", { name: "All protocols", exact: true });
     await proto.waitFor({ state: "visible" });
@@ -31,7 +31,7 @@ test.describe("Live Traffic Flows Page", () => {
   });
 
   test("flows table shows flag or periodicity columns when data exists", async ({ page }) => {
-    const offline = page.getByText("Backend engine not reachable", { exact: false });
+    const offline = page.getByText(/not reachable/);
     const empty = page.getByText("No active flows", { exact: false });
     const period = page.getByText("Periodicity", { exact: true });
     const flags = page.getByText("TCP flags", { exact: true });

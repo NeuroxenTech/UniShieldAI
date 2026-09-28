@@ -2,11 +2,11 @@ import { test, expect } from "@playwright/test";
 import { attachFullPage } from "./_helpers";
 
 const routes = [
-  { label: "Security Overview", path: "/", heading: "Security Overview" },
+  { label: "SOC Overview", path: "/", heading: "Security Overview" },
   { label: "Alerts", path: "/alerts", heading: "Security Alerts" },
   { label: "Live Traffic", path: "/traffic", heading: "Live Traffic Flows" },
+  { label: "Packet Inspector", path: "/packets", heading: "Packet Inspector" },
   { label: "Detection Engine", path: "/engine", heading: "Detection Engine" },
-  { label: "About · PS", path: "/about", heading: "PS 26145 · About" },
 ];
 
 test.describe("Sidebar Navigation", () => {

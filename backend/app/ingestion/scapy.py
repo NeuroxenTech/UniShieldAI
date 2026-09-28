@@ -18,6 +18,11 @@ class ScapyParser(FlowParserBase):
     def __init__(self, aggregation_window: float = 1.0) -> None:
         self.aggregation_window = aggregation_window
 
+    def parse_line(self, line: str) -> FlowRecord | None:
+        raise NotImplementedError(
+            "ScapyParser parses pcap payloads/files via parse_payload/parse_pcap_file, not lines"
+        )
+
     def parse_payload(self, payload: bytes) -> list[FlowRecord]:
         try:
             from scapy.all import PcapReader, IP, TCP, UDP, ICMP, Raw
@@ -84,7 +89,7 @@ class ScapyParser(FlowParserBase):
             protocol = "udp"
             src_port, dst_port = udp.sport, udp.dport
             flags = {}
-            if src_port == 53:
+            if src_port == 53 or dst_port == 53:
                 dns_qname = _extract_dns_qname(pkt)
         elif ICMP in pkt:
             protocol = "icmp"
@@ -136,8 +141,12 @@ def _extract_dns_qname(pkt) -> str | None:
     try:
         from scapy.all import DNS, DNSQR
         if DNS in pkt and pkt[DNS].qd and DNSQR in pkt[DNS]:
-            qname = str(pkt[DNS][DNSQR].qname)
-            return qname.rstrip(".") if qname else None
+            qname = pkt[DNS][DNSQR].qname
+            if isinstance(qname, bytes):
+                qname = qname.decode("utf-8", "replace").rstrip(".")
+            else:
+                qname = str(qname).rstrip(".")
+            return qname or None
     except Exception:
         return None
     return None

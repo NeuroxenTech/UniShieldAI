@@ -58,7 +58,7 @@ class ScapyLiveSource(FlowSourceBase):
                     elif UDP in pkt:
                         protocol = "udp"
                         s_port, d_port = pkt[UDP].sport, pkt[UDP].dport
-                        if s_port == 53:
+                        if s_port == 53 or d_port == 53:
                             from app.ingestion.scapy import _extract_dns_qname
                             dns_qname = _extract_dns_qname(pkt)
                     elif ICMP in pkt:

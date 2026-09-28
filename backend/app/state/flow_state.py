@@ -52,8 +52,15 @@ class FlowEntry:
         fin_count: int = 0,
         ts: float | None = None,
     ) -> None:
-        """Merge an aggregated flow report into this flow's running totals."""
-        now = ts if ts is not None else time.time()
+        """Merge an aggregated flow report into this flow's running totals.
+
+        ``ts`` feeds the periodic-signal timeline (beacon cadence, packet
+        inter-arrival) but last_seen always tracks *wall-clock* arrival so the
+        expiry manager never evicts a freshly updated flow just because a
+        synthetic beacon carries a back-dated timestamp (c2 demo beacons are
+        stamped ~60s apart while still being POSTed live).
+        """
+        now = time.time()
         self.packet_count += int(packet_count)
         self.byte_count += int(byte_count)
         self.syn_count += int(syn_count)
@@ -61,7 +68,7 @@ class FlowEntry:
         self.rst_count += int(rst_count)
         self.fin_count += int(fin_count)
         self.last_seen = now
-        self.timestamps.append(now)
+        self.timestamps.append(ts if ts is not None else now)
         if len(self.timestamps) > 1000:
             self.timestamps = self.timestamps[-500:]
 
