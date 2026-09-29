@@ -20,12 +20,14 @@ export function useEngineSync() {
     const h = handlers.current;
     let disposed = false;
 
+    const liveEnabled = () => useEngine.getState().liveEnabled;
+
     h.refreshAll();
     const poll = window.setInterval(() => {
-      if (!disposed) h.refreshAll();
+      if (!disposed && liveEnabled()) h.refreshAll();
     }, POLL_MS);
     const ticker = window.setInterval(() => {
-      if (!disposed) h.tick();
+      if (!disposed && liveEnabled()) h.tick();
     }, TICK_MS);
 
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -67,10 +69,16 @@ export function useEngineSync() {
       `${proto}//${location.host}/ws`,
       (msg) => {
         const m = msg as { type?: string; data?: RuntimeMetrics };
-        if (m?.type === "metrics" && typeof m.data?.flow_rate_fps === "number") {
-          h.pushMetricsSample(m.data, 0);
+        if (m?.type === "live_state") {
+          useEngine.setState({
+            liveEnabled: Boolean((m.data as { enabled?: boolean })?.enabled),
+          });
+        } else if (m?.type === "metrics" && typeof m.data?.flow_rate_fps === "number") {
+          if (liveEnabled()) h.pushMetricsSample(m.data, 0);
         } else if (m?.type === "engine_state") {
-          useEngine.setState({ engine: m.data as unknown as EngineMetrics });
+          if (liveEnabled()) {
+            useEngine.setState({ engine: m.data as unknown as EngineMetrics });
+          }
         }
       },
       () => h.setWsConnected(true)
@@ -81,7 +89,7 @@ export function useEngineSync() {
       `${proto}//${location.host}/ws/alerts`,
       (msg) => {
         const a = msg as Alert;
-        if (a && typeof a === "object" && a.alert_id) {
+        if (a && typeof a === "object" && a.alert_id && liveEnabled()) {
           h.pushAlert(a, "ws");
         }
       },
@@ -102,31 +110,52 @@ export function ConnectionBadge() {
   const wsConnected = useEngine((s) => s.wsConnected);
   const error = useEngine((s) => s.error);
   const lastUpdated = useEngine((s) => s.lastUpdated);
+  const liveEnabled = useEngine((s) => s.liveEnabled);
+
+  const paused = !liveEnabled;
+  const connected = wsConnected && liveEnabled;
+  const label = paused
+    ? "PAUSED"
+    : wsConnected
+      ? "LIVE"
+      : lastUpdated
+        ? "POLLING"
+        : "OFFLINE";
 
   return (
     <span
       className={`flex items-center gap-1.5 text-[11px] px-2.5 h-7 rounded-full border font-medium ${
-        wsConnected
-          ? "text-[#34D399] border-[#34D399]/30 bg-[#34D399]/10"
-          : "text-[#FF9F43] border-[#FF9F43]/30 bg-[#FF9F43]/10"
+        paused
+          ? "text-[#FF9F43] border-[#FF9F43]/30 bg-[#FF9F43]/10"
+          : connected
+            ? "text-[#34D399] border-[#34D399]/30 bg-[#34D399]/10"
+            : "text-[#FF9F43] border-[#FF9F43]/30 bg-[#FF9F43]/10"
       }`}
-      title={error ? `Engine sync issue: ${error}` : "Live UniShield AI engine feed"}
+      title={
+        paused
+          ? "Live feed paused — alerts still being captured and stored"
+          : error
+            ? `Engine sync issue: ${error}`
+            : "Live UniShield AI engine feed"
+      }
     >
       <span
         className={`w-1.5 h-1.5 rounded-full ${
-          wsConnected ? "bg-[#34D399] live-source" : "bg-[#FF9F43]"
+          paused || !connected ? "bg-[#FF9F43]" : "bg-[#34D399] live-source"
         }`}
       />
-      {wsConnected ? "LIVE" : lastUpdated ? "POLLING" : "OFFLINE"}
-      <span className="hidden lg:inline text-[10px] opacity-70">
-        {lastUpdated
-          ? new Date(lastUpdated).toLocaleTimeString("en-US", {
-              hour12: false,
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : ""}
-      </span>
+      {label}
+      {!paused && (
+        <span className="hidden lg:inline text-[10px] opacity-70">
+          {lastUpdated
+            ? new Date(lastUpdated).toLocaleTimeString("en-US", {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : ""}
+        </span>
+      )}
     </span>
   );
 }

@@ -50,6 +50,39 @@ class Settings(BaseSettings):
     netflow_udp_port: int = 2055
     netflow_udp_host: str = "0.0.0.0"
 
+    # Mobile push notifications via ntfy.sh (self-hosted ntfy also works).
+    # Enabled only when both ntfy_enabled is true AND a topic is configured.
+    ntfy_enabled: bool = False
+    ntfy_url: str = "https://ntfy.sh"
+    ntfy_topic: str = ""
+
+    # SMS/WhatsApp-style phone alerts. Recipients are E.164 mobile numbers
+    # (e.g. +919876543210). sms_provider is "mock" (logs the message that a
+    # gateway would send — the only provider usable without external API keys);
+    # "twilio" / "fast2sms" / "callmebot" need a per-account key from you.
+    # callmebot delivers via WhatsApp (free) and needs SMS_CALLMEBOT_KEYS in
+    # the form "PHONE:APIKEY,PHONE:APIKEY" (one key per authorized number).
+    sms_enabled: bool = False
+    sms_provider: str = "mock"
+    sms_gateway_url: str = ""
+    sms_gateway_account: str = ""
+    sms_gateway_api_key: str = ""
+    sms_sender_id: str = "UNISHILD"
+    sms_twilio_content_sid: str = ""
+    sms_twilio_content_var: str = "1"
+    sms_callmebot_keys: Annotated[
+        list[str],
+        NoDecode,
+    ] = []
+    # Telegram Bot API alerts (free, reliable). TELEGRAM_CHAT_ID may hold a
+    # comma-separated list of chat ids (negative for group chats).
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    phone_numbers: Annotated[
+        list[str],
+        NoDecode,
+    ] = []
+
     zeek_log_path: str = "logs/zeek"
     sensor_endpoint: str = "http://localhost:8000/api/v1/traffic/flow"
 
@@ -67,6 +100,20 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_cors_list(cls, value):
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("phone_numbers", mode="before")
+    @classmethod
+    def _parse_phone_list(cls, value):
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("sms_callmebot_keys", mode="before")
+    @classmethod
+    def _parse_keymap_list(cls, value):
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value

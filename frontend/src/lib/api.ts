@@ -243,6 +243,14 @@ export const api = {
   models: () => request<ModelsResponse>(`/api/v1/models`),
   rules: () => request<RulesResponse>(`/api/v1/models/rules`),
 
+  /* live feed control */
+  liveState: () => request<{ enabled: boolean; paused: boolean }>(`/api/v1/engine/live`),
+  setLiveState: (enabled: boolean) =>
+    request<{ enabled: boolean; paused: boolean }>(`/api/v1/engine/live`, {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    }),
+
   /* traffic captures */
   captures: () => request<CapturesResponse>(`/api/v1/captures/incidents`),
   activeCapture: () => request<ActiveCapture>(`/api/v1/captures/active`),

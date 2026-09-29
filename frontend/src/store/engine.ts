@@ -91,6 +91,7 @@ interface EngineState {
   rules: RulesResponse | null;
 
   wsConnected: boolean;
+  liveEnabled: boolean;
   loading: boolean;
   error: string | null;
   gotData: boolean;
@@ -104,6 +105,7 @@ interface EngineState {
   refreshAll: () => Promise<void>;
   refreshAlerts: () => Promise<void>;
   resolveAlert: (alertId: string) => Promise<void>;
+  toggleLiveFeed: () => Promise<void>;
   pushAlert: (alert: Alert, via?: "ws" | "poll") => void;
   absorbAlerts: (list: Alert[]) => void;
   touchFlows: (flows: FlowRow[]) => void;
@@ -241,6 +243,7 @@ export const useEngine = create<EngineState>((set, get) => ({
   rules: null,
 
   wsConnected: false,
+  liveEnabled: true,
   loading: false,
   error: null,
   gotData: false,
@@ -337,6 +340,17 @@ export const useEngine = create<EngineState>((set, get) => ({
           a.alert_id === alertId ? { ...a, status: resp.status } : a
         ),
       }));
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  toggleLiveFeed: async () => {
+    const next = !get().liveEnabled;
+    try {
+      await api.setLiveState(next);
+      set({ liveEnabled: next });
+      if (next) await get().refreshAll();
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
     }

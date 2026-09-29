@@ -45,6 +45,8 @@ def _feature_summary(features) -> dict:
     return {
         "packet_count": getattr(features, "packet_count", 0),
         "byte_count": getattr(features, "byte_count", 0),
+        "src_port": getattr(features, "src_port", None),
+        "dst_port": getattr(features, "dst_port", None),
         "syn_ratio": round(getattr(features, "syn_ratio", 0.0), 4),
         "unique_dst_ports": getattr(features, "unique_dst_ports", 0),
         "connection_frequency": round(getattr(features, "connection_frequency", 0.0), 4),

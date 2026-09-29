@@ -22,12 +22,17 @@ from app.api import (
     captures,
     detection,
     health,
+    live,
     metrics,
     models,
+    notify,
     traffic,
     websocket,
 )
+from app.notifications.ntfy import ntfy_notifier
+from app.notifications.sms import sms_notifier
 from app.realtime.events import AlertEvent
+from app.state.live import live_feed_controller
 
 setup_logging()
 logger = get_logger("unishield.main")
@@ -35,6 +40,8 @@ logger = get_logger("unishield.main")
 
 async def _publish_alert(ctx) -> None:
     try:
+        if not live_feed_controller.is_enabled():
+            return  # live feed paused: keep storing, stop broadcasting
         await connection_manager.broadcast(AlertEvent(ctx).payload)
     except Exception:
         logger.exception("Failed to broadcast alert")
@@ -45,6 +52,16 @@ async def _wire_publishers() -> None:
     event_publisher.register_stream("engine_state", _engine_producer)
     pipeline.alert_manager.register_publisher(lambda ctx: _publish_alert(ctx))
     pipeline.alert_manager.register_persister(lambda ctx: persist_worker.submit(ctx))
+    pipeline.alert_manager.register_notifier(ntfy_notifier.notify)
+    pipeline.alert_manager.register_notifier(sms_notifier.notify)
+    if ntfy_notifier.enabled:
+        logger.info("Mobile push enabled → %s/%s", ntfy_notifier.url, ntfy_notifier.topic)
+    else:
+        logger.info("Mobile push disabled (set NTFY_ENABLED=true + NTFY_TOPIC to enable)")
+    if sms_notifier.enabled:
+        logger.info("Phone alerts enabled for %s → %s", sms_notifier.provider, ", ".join(sms_notifier.recipients))
+    else:
+        logger.info("Phone alerts disabled (set SMS_ENABLED=true + PHONE_NUMBERS to enable)")
 
 
 def _metrics_producer() -> dict:
@@ -120,6 +137,8 @@ app.include_router(traffic.router)
 app.include_router(alerts.router)
 app.include_router(captures.router)
 app.include_router(detection.router)
+app.include_router(live.router)
+app.include_router(notify.router)
 app.include_router(metrics.router)
 app.include_router(models.router)
 app.include_router(websocket.router)

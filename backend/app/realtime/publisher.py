@@ -3,6 +3,7 @@ from typing import Any, Awaitable
 
 from app.core.logging import get_logger
 from app.realtime.manager import connection_manager
+from app.state.live import live_feed_controller
 
 logger = get_logger("unishield.publisher")
 
@@ -39,6 +40,8 @@ class EventPublisher:
             await asyncio.sleep(self.interval_sec)
 
     async def _publish_all(self) -> None:
+        if not live_feed_controller.is_enabled():
+            return  # live feed paused: freeze metrics/state streams
         for name, producer in self._streams.items():
             try:
                 data = producer()
