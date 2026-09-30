@@ -5,4 +5,4 @@ backend/unishield.db
 backend/unishield.db-journal
 
 # Internal prep docs (never commit)
-docs/Presentation-Prep.md
+docs/Presentation-Prep.mdbackend/logs/
