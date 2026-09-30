@@ -5,6 +5,7 @@ from app.schemas.features import FlowFeatures
 from app.schemas.traffic import FlowRecord
 from app.state.flow_state import FlowEntry
 from app.state.connection_tracker import connection_tracker
+from app.utils.time import now_epoch
 
 
 def _safe_divide(numerator: float, denominator: float) -> float:
@@ -26,7 +27,9 @@ class FeatureExtractor:
             f"{record.dst_ip}:{record.dst_port}:{record.protocol}"
         )
         conn = connection_tracker.get(conn_key)
-        dst_connections = connection_tracker.connections_for_dst(record.dst_ip)
+        dst_connections = _recent_connections(
+            connection_tracker.connections_for_dst(record.dst_ip)
+        )
         dst_ports = {c.dst_port for c in dst_connections if c.dst_port is not None}
         src_ips = {c.src_ip for c in dst_connections}
 
@@ -71,9 +74,16 @@ class FeatureExtractor:
         duration = entry.duration
         rate_window = max(duration, _MIN_RATE_WINDOW_SEC)
         size_ratio = _safe_divide(entry.byte_count, entry.packet_count)
-        between = connection_tracker.connections_between(entry.src_ip, entry.dst_ip)
+        between = _recent_connections(
+            connection_tracker.connections_between(entry.src_ip, entry.dst_ip),
+            protocol=entry.protocol,
+        )
         dst_ports = {c.dst_port for c in between if c.dst_port is not None}
-        dst_ips = {c.dst_ip for c in between}
+        src_conns = _recent_connections(
+            connection_tracker.connections_for_src(entry.src_ip)
+        )
+        dst_ips = {c.dst_ip for c in src_conns}
+        dst_port_conn_freq = _dst_port_conn_freq(between, entry.dst_port)
         features = FlowFeatures(
             flow_id=entry.flow_id,
             src_ip=entry.src_ip,
@@ -92,7 +102,8 @@ class FeatureExtractor:
             connection_frequency=_connection_frequency(entry.src_ip, duration),
             unique_dst_ports=len(dst_ports),
             unique_dst_ips=max(1, len(dst_ips)),
-            outbound_inbound_ratio=_outbound_inbound_ratio(entry.src_ip.startswith("10.0") and "outbound" or "inbound"),
+            dst_port_conn_freq=dst_port_conn_freq,
+            outbound_inbound_ratio=_outbound_inbound_ratio(entry.src_ip, entry.byte_count, duration),
             dns_entropy=_dns_entropy_record(entry, dns_query),
             inter_arrival_time_mean=_inter_arrival_from_ts(entry.timestamps),
             inter_arrival_time_std=_inter_arrival_std_from_ts(entry.timestamps),
@@ -101,6 +112,7 @@ class FeatureExtractor:
             avg_packet_size=size_ratio,
             source_entropy=_source_entropy(entry.dst_ip),
             udp_amp_ratio=_udp_amp_ratio(entry),
+            small_packet_ratio=_small_packet_ratio_src(entry),
         )
         self._features = features
         return features
@@ -109,16 +121,53 @@ class FeatureExtractor:
         return self._features
 
 
-def _outbound_inbound_ratio(direction: str) -> float:
-    if direction == "outbound":
-        return 1.0
-    if direction == "inbound":
-        return 0.0
-    return 0.5
+def _is_internal(ip: str | None) -> bool:
+    if not ip:
+        return False
+    return (
+        ip.startswith("10.")
+        or ip.startswith("192.168.")
+        or (len(ip) >= 7 and ip[:7] == "172.16." and ip.split(".")[1].isdigit() and 16 <= int(ip.split(".")[1]) <= 31)
+    )
+
+
+def _outbound_inbound_ratio(src_ip: str, byte_count: int, duration: float) -> float:
+    """Byte-weighted egress/ingress ratio for this host.
+
+    Counts host bytes toward external (non-RFC1918) destinations vs bytes
+    received from external sources, taken from the connection tracker's
+    accumulated counters. Never counts the current flow's own bytes as
+    "outbound" — doing so made a single fresh flow read as a 54:1 egress
+    signal and fired the data-exfiltration rule on every connection.
+    """
+    outbound = 0.0
+    inbound = 0.0
+    for c in connection_tracker.connections_for_src(src_ip):
+        if not _is_internal(c.dst_ip):
+            outbound += float(c.byte_count)
+    for c in connection_tracker.connections_for_dst(src_ip):
+        if not _is_internal(c.src_ip):
+            inbound += float(c.byte_count)
+    return _safe_divide(outbound, max(1.0, inbound))
 
 
 _CONN_FREQ_WINDOW_SEC = 60.0
 _MIN_RATE_WINDOW_SEC = 1.0
+# Aggregate "how this source/destination behaves right now" signals (distinct
+# dst ports, dst hosts, small-probe ratio, source-IP spread) are evaluated over
+# a short sliding window ONLY. The connection tracker retains 5-tuples for the
+# full expiration (300s), so without a window a finished port scan keeps its
+# ~70+ distinct ports attached to the (src,dst) pair and every LATER flow from
+# that source reads as port_scan (c2/dns/brute runs right after a scan in the
+# attack suite get mislabeled, and brute_force's unique_ports==1 check fails).
+_PAIR_AGGREGATION_WINDOW_SEC = 30.0
+
+
+def _recent_connections(conns: list, protocol: str | None = None) -> list:
+    cutoff = now_epoch() - _PAIR_AGGREGATION_WINDOW_SEC
+    if protocol:
+        return [c for c in conns if c.last_seen >= cutoff and c.protocol == protocol]
+    return [c for c in conns if c.last_seen >= cutoff]
 
 
 def _connection_frequency(src_ip: str, duration: float) -> float:
@@ -137,11 +186,49 @@ def _connection_frequency(src_ip: str, duration: float) -> float:
     return _safe_divide(recent, _CONN_FREQ_WINDOW_SEC)
 
 
+def _dst_port_conn_freq(between: list, dst_port: int | None) -> float:
+    """Connections/second aimed at ONE destination port (recent window).
+
+    Same denominator as connection_frequency but filtered to this flow's own
+    dst_port. A brute force stacks many connections on a single auth port, so
+    this stays high regardless of how many OTHER ports the host recently hit
+    (a concurrent port scan inflates connection_frequency but not this value).
+    """
+    if dst_port is None:
+        return 0.0
+    target = sum(1 for c in between if c.dst_port == dst_port)
+    if target <= 0:
+        return 0.0
+    return _safe_divide(target, _CONN_FREQ_WINDOW_SEC)
+
+
 def _small_packet_ratio(conn) -> float:
     if conn is None or not conn.events:
         return 0.0
     small = sum(1 for e in conn.events if e.get("size", 0) < 64)
     return _safe_divide(small, len(conn.events))
+
+
+def _small_packet_ratio_src(entry: FlowEntry) -> float:
+    """Fraction of connections from this host that are tiny (recon probes).
+
+    Small SYN-only or zero-payload probes (~40-64 B) indicate port/enumeration
+    scanning. Per-source accumulative: the more tiny connections this host
+    makes relative to its total, the more it looks like a scanner.
+    """
+    conns = _recent_connections(connection_tracker.connections_for_src(entry.src_ip))
+    if not conns:
+        return 0.0
+    small = 0
+    total = 0
+    for c in conns:
+        if not c.packet_count or c.byte_count <= 0:
+            continue
+        avg = c.byte_count / float(c.packet_count)
+        total += 1
+        if avg < 64.0:
+            small += 1
+    return _safe_divide(small, total)
 
 
 def _inter_arrival(conn) -> float:
@@ -154,7 +241,8 @@ def _inter_arrival(conn) -> float:
 def _inter_arrival_from_ts(timestamps: list[float]) -> float:
     if len(timestamps) < 2:
         return 0.0
-    diffs = [b - a for a, b in zip(timestamps[:-1], timestamps[1:]) if b > a]
+    ordered = sorted(timestamps)
+    diffs = [b - a for a, b in zip(ordered[:-1], ordered[1:]) if b > a]
     if not diffs:
         return 0.0
     return math.fsum(diffs) / len(diffs)
@@ -163,7 +251,8 @@ def _inter_arrival_from_ts(timestamps: list[float]) -> float:
 def _inter_arrival_std_from_ts(timestamps: list[float]) -> float:
     if len(timestamps) < 3:
         return 0.0
-    diffs = [b - a for a, b in zip(timestamps[:-1], timestamps[1:]) if b > a]
+    ordered = sorted(timestamps)
+    diffs = [b - a for a, b in zip(ordered[:-1], ordered[1:]) if b > a]
     if len(diffs) < 2:
         return 0.0
     mean = math.fsum(diffs) / len(diffs)
@@ -177,12 +266,16 @@ def _periodicity_from_ts(timestamps: list[float]) -> float:
     Computed from the coefficient of variation (CV) of inter-packet gaps.
     A low CV means packets arrive on a very regular cadence (beaconing,
     tunneling) -> high periodicity. A high CV means bursty, irregular
-    traffic (typical web page loads) -> low periodicity. Requires at least
-    3 timestamps; single-shot or near-single-shot flows score 0.
+    traffic (typical web page loads) -> low periodicity. Timestamps are
+    sorted first: aggregated flow reports may arrive back-dated (replays),
+    never assume arrival order equals chronological order.
+    Requires at least 3 timestamps; single-shot or near-single-shot flows
+    score 0.
     """
     if len(timestamps) < 3:
         return 0.0
-    diffs = [b - a for a, b in zip(timestamps[:-1], timestamps[1:]) if b > a]
+    ordered = sorted(timestamps)
+    diffs = [b - a for a, b in zip(ordered[:-1], ordered[1:]) if b > a]
     if len(diffs) < 2:
         return 0.0
     mean = math.fsum(diffs) / len(diffs)
@@ -230,8 +323,10 @@ def _source_entropy(dst_ip: str) -> float:
 
     A widely scattered (spoofed/amplified) flood pushes entropy towards the
     maximum of log2(N); a two-party conversation yields ~0. PS requirement (a).
+    Windowed to recent connections so a finished flood can't keep this signal
+    high for the 5-minute tracker lifetime.
     """
-    conns = connection_tracker.connections_for_dst(dst_ip)
+    conns = _recent_connections(connection_tracker.connections_for_dst(dst_ip))
     if len(conns) < 2:
         return 0.0
     counts: dict[str, int] = {}

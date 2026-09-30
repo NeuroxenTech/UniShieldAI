@@ -3,6 +3,7 @@ import threading
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 
+from app.core.config import settings
 from app.utils.time import now_epoch
 
 
@@ -49,6 +50,7 @@ class ConnectionTracker:
                 self._connections[key] = conn
                 self._by_dst_ip[dst_ip].add(key)
                 self._by_src_ip[src_ip].add(key)
+                self._enforce_cap_locked()
             conn.last_seen = now_epoch()
             conn.packet_count += 1
             conn.byte_count += packet_size
@@ -58,6 +60,21 @@ class ConnectionTracker:
                     conn.established = True
                 conn.events.append({"ts": now_epoch(), "flags": sorted(flags), "size": packet_size})
             return conn
+
+    def _enforce_cap_locked(self) -> None:
+        # A spoofed-source flood creates a distinct state per 5-tuple. Bound the
+        # tracker so memory doesn't balloon with tens of thousands of states.
+        # Amortized: only when > 1.5x cap, drop the oldest down to 0.8x cap
+        # (fresh crisis-flood states survive; the O(N log N) sort runs rarely).
+        cap = settings.max_concurrent_flows
+        if len(self._connections) <= int(cap * 1.5):
+            return
+        target = int(cap * 0.8)
+        stale = sorted(self._connections.values(), key=lambda c: c.last_seen)
+        for conn in stale[: max(0, len(stale) - target)]:
+            self._connections.pop(conn.conn_key, None)
+            self._by_src_ip.get(conn.src_ip, set()).discard(conn.conn_key)
+            self._by_dst_ip.get(conn.dst_ip, set()).discard(conn.conn_key)
 
     def get(self, key: str) -> ConnectionState | None:
         with self._lock:
@@ -83,15 +100,15 @@ class ConnectionTracker:
         cutoff = now_epoch() - within_sec
         with self._lock:
             return sum(
-                1 for c in self._connections.values()
-                if c.src_ip == src_ip and c.last_seen >= cutoff
+                1 for k in self._by_src_ip.get(src_ip, set())
+                if (c := self._connections.get(k)) is not None and c.last_seen >= cutoff
             )
 
     def connections_between(self, src_ip: str, dst_ip: str) -> list[ConnectionState]:
         with self._lock:
             return [
-                c for c in self._connections.values()
-                if c.src_ip == src_ip and c.dst_ip == dst_ip
+                c for k in self._by_src_ip.get(src_ip, set())
+                if (c := self._connections.get(k)) is not None and c.dst_ip == dst_ip
             ]
 
     def count_connections(self) -> int:

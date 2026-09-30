@@ -1,4 +1,5 @@
 from app.core.config import settings
+from app.core.constants import ThreatType
 from app.decision.classifier import ThreatClassifier, classifier
 from app.decision.confidence import ConfidenceEstimator, confidence_estimator
 from app.decision.risk_fusion import RiskFusion, risk_fusion
@@ -20,7 +21,8 @@ class DecisionEngine:
         self.severity = severity_
 
     def decide(self, flow_id: str, rule_assessment: dict,
-               ml_assessment: dict) -> DecisionResult:
+               ml_assessment: dict, dst_ip: str | None = None,
+               src_ip: str | None = None) -> DecisionResult:
         rule_scores: dict[str, float] = rule_assessment.get("source_scores", {})
         rule_matches = rule_assessment.get("matches", [])
 
@@ -37,8 +39,29 @@ class DecisionEngine:
 
         risk_score = float(fused["risk_score"])
         threat_type = self.classifier.classify(
-            risk_score, rule_matches, ml_assessment, anomaly_score
+            risk_score, rule_matches, ml_assessment, anomaly_score,
+            dst_ip=dst_ip, src_ip=src_ip,
         )
+
+        # A discrete technique that matched its own rule (port_scan, dns_tunneling,
+        # c2, brute_force, slowloris, ...) must always surface, even if the fused
+        # volume/scalar risk is low (e.g. a single high-entropy DNS query scores
+        # ~0.24 but IS tunneling), and the rule's own score is the strongest
+        # signal when per-flow ML was skipped on the flood fast path. Floor the
+        # risk to the strongest matched technique-rule score (at least the alert
+        # threshold) so floods read as high severity again and a lone technique
+        # match isn't silently swallowed. Volume-only labels (suspicious_traffic/
+        # ML) keep the raw weighted gate.
+        rule_technique_scores = [
+            match.score
+            for match in rule_matches
+            if match.threat_type != ThreatType.SUSPICIOUS_TRAFFIC
+        ]
+        if rule_technique_scores and threat_type not in (
+            ThreatType.BENIGN,
+            ThreatType.SUSPICIOUS_TRAFFIC,
+        ):
+            risk_score = max(risk_score, settings.detection_threshold, *rule_technique_scores)
 
         detection_sources = self._detection_sources(rule_scores, ml_assessment, is_anomaly)
         confidence = self.confidence.estimate(

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import {
@@ -24,15 +24,17 @@ import {
 import { PageHeader } from "../components/layout/PageHeader";
 import { Card } from "../components/ui/Card";
 import { StatCard } from "../components/ui/StatCard";
-import { AlertRow } from "../components/alerts/AlertRow";
+import { AlertRow, StatusChip } from "../components/alerts/AlertRow";
 import { EmptyState } from "../components/alerts/EmptyState";
-import { severityMeta } from "../lib/threats";
+import { severityMeta, threatMeta, THREATS } from "../lib/threats";
 import {
   formatNumber,
   humanThreatType,
+  type Alert,
   type EngineMetrics,
   type RuntimeMetrics,
 } from "../lib/api";
+import type { SourceActivity } from "../store/engine";
 import { useEngine } from "../store/engine";
 
 const PIE_COLORS = ["#7C5CFC", "#FF4D6A", "#FF9F43", "#FFD93D", "#6BCB77", "#38BDF8"];
@@ -56,6 +58,21 @@ export default function Overview() {
   const history = useEngine((s) => s.history);
   const gotData = useEngine((s) => s.gotData);
   const lastUpdated = useEngine((s) => s.lastUpdated);
+  const sources = useEngine((s) => s.sources);
+
+  const liveBySrc = useMemo(() => {
+    const m = new Map<string, boolean>();
+    sources.forEach((s) => s.active && m.set(s.ip, true));
+    return m;
+  }, [sources]);
+  const activeAttacks = useMemo(
+    () => sources.filter((s) => s.active && s.alertCount > 0),
+    [sources]
+  );
+  const endedAttacks = useMemo(
+    () => sources.filter((s) => !s.active && s.alertCount > 0),
+    [sources]
+  );
 
   const sevCounts = useMemo(() => {
     const c = { critical: 0, high: 0, medium: 0, low: 0 };
@@ -140,11 +157,71 @@ export default function Overview() {
         </div>
       )}
 
+      {/* Live attack tracking */}
+      <Card
+        title="Active threat sources"
+        subtitle={
+          activeAttacks.length
+            ? `${activeAttacks.length} source${activeAttacks.length === 1 ? "" : "s"} currently under active threat`
+            : endedAttacks.length
+              ? "No live attacks right now — recent sources shown below"
+              : "Monitoring traffic continuously — new threats appear here instantly"
+        }
+        className="mt-4"
+        action={
+          activeAttacks.length ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#FF8CA0] live-source">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#FF4D6A] live-source" /> Live
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#6BCB77]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#6BCB77]" /> Monitoring
+            </span>
+          )
+        }
+      >
+        {activeAttacks.length === 0 && endedAttacks.length === 0 ? (
+          <EmptyState
+            title="No tracked sessions"
+            hint="When flows arrive, an attacking source lights up here and a popup appears. Once it stops sending, it moves to Recently ended."
+          />
+        ) : (
+          <div className="flex flex-col -mx-5 -mb-5">
+            {activeAttacks.slice(0, 8).map((s) => (
+              <AttackRow key={s.ip} s={s} />
+            ))}
+            {endedAttacks.length > 0 && (
+              <div className="px-5 py-2.5 border-t border-white/[0.05] bg-white/[0.01]">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-[#475569] mb-1.5">
+                  Recently ended
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {endedAttacks.slice(0, 6).map((s) => (
+                    <span
+                      key={s.ip}
+                      className="inline-flex items-center gap-1.5 px-2 h-[22px] max-w-full min-w-0 rounded-md bg-white/[0.03] border border-white/[0.06] text-[10.5px] text-[#94A3B8] font-medium"
+                      title={s.ip}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-white/[0.2] shrink-0" />
+                      <span className="font-mono truncate min-w-0">{s.ip}</span>
+                      <span className="text-[#64748B]">
+                        {threatMeta(s.threat).label}
+                      </span>
+                      <StatusChip live={false} />
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
       {/* Charts + severity panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
         <Card
           title="Ingest & detection trend"
-          subtitle="Flow rate (per second) and cumulative alerts over the last 60 samples"
+          subtitle="Flow rate (per second) and cumulative alerts — continuous 5s samples, last ~2 minutes"
           className="lg:col-span-2"
         >
           {history.length < 2 ? (
@@ -276,7 +353,7 @@ export default function Overview() {
           ) : (
             <div className="-mx-5 -mb-5">
               {alerts.slice(0, 8).map((a) => (
-                <AlertRow key={a.alert_id} alert={a} />
+                <AlertRow key={a.alert_id} alert={a} live={liveBySrc.has(a.src_ip)} />
               ))}
             </div>
           )}
@@ -307,20 +384,7 @@ export default function Overview() {
               />
             </div>
           </Card>
-          <Card title="What am I looking at?" subtitle="PS 26145 · read-only analyzer">
-            <ul className="text-[12px] text-[#94A3B8] leading-relaxed space-y-2">
-              {[
-                "Classifies every flow using rules + ML (DDoS amplification, DNS tunneling, C2, scans…).",
-                "Detections are advisory — this console only raises alarms, it never blocks or isolates.",
-                "Best signals to watch: Ingest rate, Alerts raised, and severity spikes in the posture panel.",
-              ].map((t) => (
-                <li key={t} className="flex gap-2">
-                  <span className="text-[#6BCB77] mt-0.5">✓</span>
-                  {t}
-                </li>
-              ))}
-            </ul>
-          </Card>
+          <ThreatMatrix alerts={alerts} />
         </div>
       </div>
     </div>
@@ -331,6 +395,147 @@ function queue(metrics: RuntimeMetrics | null, engineEngine: EngineMetrics | nul
   if (metrics) return `${formatNumber(metrics.queue_high_watermark)}`;
   if (engineEngine) return `${formatNumber(engineEngine.flows_queued)}`;
   return "—";
+}
+
+function fmtDur(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m ${s % 60}s`;
+}
+
+function ThreatMatrix({ alerts }: { alerts: Alert[] }) {
+  const byType = useMemo(() => {
+    const m = new Map<string, { count: number; severity: string }>();
+    for (const a of alerts) {
+      const cur = m.get(a.threat_type) ?? { count: 0, severity: "low" };
+      const rank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+      if (rank[a.severity] > rank[cur.severity]) cur.severity = a.severity;
+      cur.count += 1;
+      m.set(a.threat_type, { ...cur });
+    }
+    return m;
+  }, [alerts]);
+
+  const maxCount = useMemo(() => {
+    let max = 0;
+    byType.forEach((v) => (max = Math.max(max, v.count)));
+    return max;
+  }, [byType]);
+
+  const rows = THREATS.filter((t) => t.type !== "benign" && t.type !== "unknown");
+
+  return (
+    <Card
+      title="Threat matrix"
+      subtitle="Every modeled threat class — observed counts in the alerts window, live or inactive"
+    >
+      <div className="flex flex-col gap-1.5">
+        {rows.length === 0 && (
+          <p className="text-[12px] text-[#64748B]">No threat classes loaded.</p>
+        )}
+        {rows.map((t) => {
+          const obs = byType.get(t.type);
+          const count = obs?.count ?? 0;
+          const sev = obs?.severity
+            ? severityMeta(obs.severity)
+            : { label: "—", color: "#334155", bg: "transparent" };
+          const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
+          return (
+            <div
+              key={t.type}
+              className="flex items-center gap-2.5"
+              title={t.blurb}
+            >
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{
+                  background: count > 0 ? sev.color : "#334155",
+                  boxShadow: count > 0 ? `0 0 6px ${sev.color}` : "none",
+                }}
+              />
+              <span className="w-[130px] min-w-0 truncate text-[11.5px] text-[#CBD5E1]">
+                {t.label}
+              </span>
+              <span className="w-3 text-right text-[10px] text-[#334155] shrink-0">
+                {count > 0 ? "" : "·"}
+              </span>
+              <div className="flex-1 h-1.5 rounded-full bg-white/[0.05] overflow-hidden min-w-[30px]">
+                {count > 0 && (
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.max(6, pct)}%`, background: sev.color }}
+                  />
+                )}
+              </div>
+              <span
+                className="w-14 text-right text-[11px] font-semibold tabular-nums shrink-0"
+                style={{ color: count > 0 ? sev.color : "#475569" }}
+              >
+                {count > 0 ? count : "inactive"}
+              </span>
+              <span
+                className="w-[54px] text-right text-[9px] uppercase tracking-wider shrink-0"
+                style={{ color: count > 0 ? sev.color : "#334155" }}
+              >
+                {count > 0 ? sev.label : "—"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function AttackRow({ s }: { s: SourceActivity }) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => force((v) => v + 1), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  const meta = severityMeta(s.severity);
+  const tmeta = threatMeta(s.threat);
+  return (
+    <div className="flex items-center gap-3 px-5 min-h-[52px] border-b border-white/[0.04]">
+      <span
+        className="w-2.5 h-2.5 rounded-full shrink-0 live-source"
+        style={{ background: meta.color, boxShadow: `0 0 8px ${meta.color}` }}
+      />
+      <span className="flex flex-col justify-center min-w-0 flex-1">
+        <span
+          className="flex items-center gap-2 text-[12.5px] font-semibold text-white min-w-0"
+          title={`${s.ip} → ${s.dst || "…"}`}
+        >
+          <span className="font-mono shrink-0 min-w-0 max-w-[45%] truncate">{s.ip}</span>
+          <span className="text-[#475569] shrink-0">→</span>
+          <span className="font-mono text-[#94A3B8] min-w-0 truncate">{s.dst || "…"}</span>
+        </span>
+        <span className="text-[10.5px] text-[#64748B] truncate">
+          {tmeta.label} · {s.alertCount} alert{s.alertCount === 1 ? "" : "s"}
+        </span>
+      </span>
+      <div className="flex items-center gap-2 shrink-0 pl-1">
+        <span
+          className="text-[11px] text-[#CBD5E1] tabular-nums text-right whitespace-nowrap"
+          title={
+            Number.isFinite(s.lastSeen) && s.lastSeen > 0
+              ? `first signal ${new Date(Math.max(0, s.firstSeen)).toLocaleTimeString([], { hour12: false })} · last signal ${new Date(s.lastSeen).toLocaleTimeString([], { hour12: false })}`
+              : undefined
+          }
+        >
+          active {fmtDur(Math.max(0, Date.now() - (Number.isFinite(s.firstSeen) && s.firstSeen > 0 ? s.firstSeen : s.lastSeen)))}
+        </span>
+        <StatusChip live />
+      </div>
+      <span
+        className="px-2 h-[20px] rounded-md text-[9.5px] font-bold uppercase tracking-wider shrink-0"
+        style={{ color: meta.color, background: meta.bg }}
+      >
+        {meta.label}
+      </span>
+    </div>
+  );
 }
 
 function SourceRow({

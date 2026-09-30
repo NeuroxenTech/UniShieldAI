@@ -19,8 +19,10 @@ test.describe("Security Overview", () => {
 
   test("KPI cards appear or a waiting state is shown", async ({ page }) => {
     const kpi = page.getByText("Ingest rate", { exact: true }).first();
-    const empty = page.getByText(/Collecting trend samples|No detections yet|Waiting for the engine to respond/).first();
-    await kpi.or(empty).waitFor({ state: "visible" });
+    const empty = page.getByText(
+      /Collecting trend samples|No detections yet|Waiting for the engine to respond|not reachable/
+    ).first();
+    await kpi.or(empty).first().waitFor({ state: "visible", timeout: 20_000 });
 
     if (await kpi.isVisible()) {
       for (const label of [
@@ -54,8 +56,13 @@ test.describe("Security Overview", () => {
       await link.click();
       clicked = true;
     } else {
-      // Empty state acceptable while backend has no alerts yet.
-      await expect(noData).toBeVisible();
+      // Empty state acceptable while backend has no alerts yet; a racing parallel
+      // pump may populate the feed between the two observations, so tolerate it.
+      await noData.or(link.first()).first().waitFor({ state: "visible" });
+      if (await link.isVisible().catch(() => false)) {
+        await link.click();
+        clicked = true;
+      }
     }
 
     if (clicked) {

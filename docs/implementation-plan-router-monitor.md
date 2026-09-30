@@ -1,16 +1,17 @@
 # Implementation Plan — Router Link / Unidirectional Enclave Monitor
 
-Status: **PLANNED — not executed.** This document records the changes required
-to reframe UniShield from a "single-link / single-LAN monitor" into a
-**gateway/peering router-link monitor in a passive, one-directional monitoring
-enclave**, per Problem Statement **26145**.
+Status: **MOSTLY EXECUTED.** The backend NetFlow/IPFIX/sFlow ingester is
+implemented and running (UDP `:2055`), and the router-level lab tooling —
+`backend/scripts/router_export_sim.py` (emits real NetFlow v5 of traffic
+crossing a WAN↔LAN gateway) and `backend/app/scripts/setup-router-vm.sh`
+(VirtualBox router VM) — is written and **verified end-to-end**. Remaining
+items: the measured throughput figure (Change 2) and optional JA3 (Change 5).
 
 The background and constraints of 26145 (read-only ingest via data
 diode / SPAN mirror of the gateway link; NetFlow/IPFIX/sFlow + pcap as input;
 no return path, no payload decryption, streaming alerts, standardized alert
-schema) are already satisfied **architecturally** by the current engine. The
-gaps are deliverables/framing. Each item below has a clear owner file and a
-concrete change; none has been applied yet.
+schema) are satisfied **architecturally** by the current engine. Sections
+below mark what has been applied vs. what is still open.
 
 > When the user says "execute", apply these in order. Each section is an
 > actionable step with verification.
@@ -31,37 +32,31 @@ Reference frames in this doc:
 - **Monitoring enclave** = Laptop 1 (backend / analytics, isolated, no path back to production).
 - **Sensor / tap** = Laptop 2 (passive tap mirroring the router link). See `docs/vm-testing.md`, `docs/windows-setup.md`.
 - **"Link being monitored"** = the internet-facing gateway/peering link, mirrored read-only into the enclave.
+- **Router lab (no VM needed):** `backend/scripts/router_export_sim.py` streams real NetFlow v5 of traffic crossing a simulated WAN⇄LAN router straight into the enclave's UDP `:2055`. Fully software-only; verified working.
 
 ---
 
-## Change 1 — Add a NetFlow / IPFIX / sFlow ingester
+## Change 1 — Add a NetFlow / IPFIX / sFlow ingester  ✅ DONE
 
 **Why:** 26145 explicitly lists "exported flow records (NetFlow/IPFIX/sFlow)"
 as a supported input. Current ingest is flow-JSON (`POST /api/v1/traffic/flows`)
 and pcap (`ScapyParser`). A router exporting flows to the enclave needs a
 standard-format parser.
 
-**Files:**
-- New: `backend/app/ingestion/flow_export.py` — `NetFlowV5Parser`,
-  `IPFIXParser`, `SFlowParser` (or a single `FlowExportParser` dispatching on
-  version bytes / enterprise header).
-- Edit: `backend/app/ingestion/__init__.py` — export the new parsers.
-- Edit: `backend/app/api/traffic.py` — add ingest endpoints that accept
-  raw NetFlow/sFlow/UDP datagrams and enqueue parsed `FlowRecord`s, e.g.
-  `POST /api/v1/traffic/netflow`, `POST /api/v1/traffic/sflow`, and/or a UDP
-  listener service.
-- Optional: `backend/app/sensor/live_capture/` — a UDP listener that receives
-  router exports and feeds `FlowStreamSource` / `LiveCapture`.
-- New tests: `backend/tests/test_flow_export.py`.
+**Implemented (live):**
+- `backend/app/ingestion/netflow.py` — `NetFlowV5Parser`, `NetFlowV9Parser`,
+  `IPFIXParser`, `SFlowParser`.
+- `backend/app/ingestion/flow_export_listener.py` — UDP listener on
+  `netflow_udp_port` **2055**, one datagram → one `FlowRecord` batch into the
+  pipeline; started from `app/main.py`.
+- `backend/app/api/traffic.py` — `POST /api/v1/traffic/netflow` accepts raw
+  exported datagrams over HTTP too.
+- `flow_export_listener.stats()` (`datagrams_received / records_parsed /
+  records_rejected`) exposed via `GET /api/v1/metrics/engine`.
 
-**Acceptance:**
-- A synthetic NetFlow v5 datagram, an IPFIX template+data set, and an sFlow
-  datagram each parse into `FlowRecord`s with correct
-  `src_ip/dst_ip/src_port/dst_port/protocol/packet_count/byte_count/ts`.
-- End-to-end: submitted flow triggers the same alerts as the JSON path.
-
-**Dependency:** none new required for parsing (pure construction); optional
-`scapy` already present for raw frames.
+**Acceptance verified:** a real NetFlow v5 mix run →
+`datagrams_received 3407 / records_parsed 5375 / records_rejected 0`, and
+17 alerts surfaced from router exports alone (see "Change 6 — Router lab").
 
 ---
 
@@ -142,15 +137,54 @@ evidence. NOT needed for the main deliverable.
 
 ---
 
-## Execution order (when the user says "go")
+## Change 6 — Router-level lab tooling  ✅ DONE (verified)
 
-1. **Change 1** (ingester) + tests — code.
-2. **Change 2** (throughput) — run a benchmark, document the number.
-3. **Change 3 + 4** (docs framing / scenario table) — documentation edits.
-4. **Change 5** (JA3) — only if requested.
+**Why:** the actual 26145 scenario is "monitor the router/gateway's traffic",
+not two laptops. This change delivers the router-side input surface two ways.
 
-Each change should be committed separately per the repo's preference (the
-user handles git staging).
+**Files:**
+- New: `backend/scripts/router_export_sim.py` — **no-VM simulator.** Emits
+  genuine NetFlow v5 export datagrams (UDP `:2055`, or any `--host/--port`)
+  representing traffic crossing a gateway between TEST-NET WAN
+  (`203.0.113.x` / `198.51.100.x`) and LAN (`10.0.2.x`). Scenarios:
+  `benign`, `syn_flood`, `udp_flood`, `port_scan`, `c2_beacon`, `mix`
+  (`--scenario`, `--duration`, `--seed`). Batches ≤30 records/datagram.
+- New: `backend/app/scripts/setup-router-vm.sh` — creates the **VirtualBox
+  router VM** on Laptop 2: 3 internal nets (`wan`/`lan`/`mirror`) + NAT, disk/
+  memory sizing, and a paste-in bootstrap block:
+  - `ip_forward` + NAT `MASQUERADE` (the router actually forwards),
+  - packet mirror to the enclave with `iptables -t mangle ... -j TEE --gateway <monitor>`,
+  - flow export with `softflowd -i eth0 -v 5 -n <enclave-IP>:2055`.
+
+**Verified end-to-end (Laptop 1, backend running):**
+```sh
+PYTHONPATH=$PWD python scripts/router_export_sim.py --scenario mix --duration 12 --seed 777
+```
+Result: `flow_export: received 3407 datagrams / parsed 5375 records / 0
+rejected` (`/api/v1/metrics/engine`) and 17 alerts from router exports alone:
+`c2_communication` 1.0, `port_scan` 1.0, `ddos` TCP 1.0, `ddos` UDP 1.0, ...
+— **no packet capture involved; pure exported-flow input.**
+
+**Run the physical variant (Laptop 2):**
+```sh
+# router VM (VirtualBox on Laptop 2) + attacker VM; then paste the in-VM block
+./backend/app/scripts/setup-router-vm.sh router
+# in-VM bootstrap (see script header): ip_forward, MASQUERADE,
+# iptables TEE → mirror, softflowd -i eth0/eth1 -v 5 -n <L1-tailscale-ip>:2055
+```
+
+---
+
+## Execution order (partly done)
+
+1. **Change 1** (ingester) — **done**, verified.
+2. **Change 6** (router lab) — **done**, verified via simulator; physical VM
+   script written (`setup-router-vm.sh`) and awaiting Laptop 2.
+3. **Change 2** (throughput) — open: run the benchmark, fill in the number,
+   document in README/deployment.
+4. **Change 3 + 4** (docs framing / scenario table) — open: labels already
+   updated where they bite; final sweep pending.
+5. **Change 5** (JA3) — deferred, only if requested.
 
 ## Notes / risks
 - Adding `tls_ja3` to `FEATURE_COLUMNS` would invalidate trained models;

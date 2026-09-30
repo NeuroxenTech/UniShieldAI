@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ShieldCheck, RefreshCw, Radio, ShieldAlert } from "lucide-react";
+import { ShieldCheck, RefreshCw, Radio, ShieldAlert, Pause, Play } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { useEngine } from "../../store/engine";
 import { formatNumber } from "../../lib/api";
@@ -30,13 +30,17 @@ export function TopBar({ expanded, badge }: { expanded: boolean; badge?: ReactNo
   const metrics = useEngine((s) => s.metrics);
   const stats = useEngine((s) => s.stats);
   const alerts = useEngine((s) => s.alerts);
+  const sources = useEngine((s) => s.sources);
   const refreshAll = useEngine((s) => s.refreshAll);
   const gotData = useEngine((s) => s.gotData);
+  const liveEnabled = useEngine((s) => s.liveEnabled);
+  const toggleLiveFeed = useEngine((s) => s.toggleLiveFeed);
 
   const open = alerts.filter(
     (a) => a.status !== "resolved" && a.status !== "ignored"
   ).length;
   const critical = alerts.filter((a) => a.severity === "critical").length;
+  const activeAttacks = sources.filter((s) => s.active && s.alertCount > 0).length;
 
   return (
     <header
@@ -92,6 +96,23 @@ export function TopBar({ expanded, badge }: { expanded: boolean; badge?: ReactNo
           accent="#7C86A3"
         />
         <div
+          className="hidden lg:flex items-center gap-1.5 px-2.5 ml-1 h-7 rounded-full border font-medium"
+          style={
+            activeAttacks > 0
+              ? { color: "#FF8CA0", borderColor: "rgba(255,77,106,0.35)", background: "rgba(255,77,106,0.08)" }
+              : { color: "#64748B", borderColor: "rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }
+          }
+          title={`${activeAttacks} attack source${activeAttacks === 1 ? "" : "s"} sending traffic right now`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${activeAttacks > 0 ? "bg-[#FF4D6A] live-source" : "bg-[#334155]"}`}
+          />
+          <span className="text-[11px] font-semibold tabular-nums">{activeAttacks}</span>
+          <span className="text-[10px] uppercase tracking-wider opacity-70">
+            active attacks
+          </span>
+        </div>
+        <div
           className={cn(
             "flex items-center gap-1.5 pl-3 ml-1",
             critical > 0 ? "text-[#FF4D6A]" : "text-[#6BCB77]"
@@ -107,8 +128,25 @@ export function TopBar({ expanded, badge }: { expanded: boolean; badge?: ReactNo
 
       <div className="flex-1" />
 
-      {/* Right side: refresh + live badge */}
-      <div className="flex items-center gap-3">
+      {/* Right side: refresh + live feed toggle + live badge */}
+      <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          aria-label={liveEnabled ? "Pause live feed and alerts" : "Resume live feed"}
+          title={
+            liveEnabled
+              ? "Pause live feed & alerts (still capturing and storing)"
+              : "Resume live feed"
+          }
+          onClick={() => toggleLiveFeed()}
+          className={`w-9 h-9 rounded-lg border border-white/[0.06] flex items-center justify-center transition-colors ${
+            liveEnabled
+              ? "bg-white/[0.03] text-[#94A3B8] hover:text-[#CBD5E1] hover:border-white/[0.12]"
+              : "bg-[#3A2B10] text-[#FF9F43] hover:bg-[#4A3815] border-[#FF9F43]/30"
+          }`}
+        >
+          {liveEnabled ? <Pause size={16} strokeWidth={1.75} /> : <Play size={16} strokeWidth={1.75} />}
+        </button>
         <button
           type="button"
           aria-label="Refresh now"
