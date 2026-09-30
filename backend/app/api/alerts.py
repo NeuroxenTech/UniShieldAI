@@ -1,0 +1,85 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.logging import get_logger
+from app.db.alert_repository import AlertRepository
+from app.db.database import get_session
+from app.engine.pipeline import pipeline
+from app.schemas.alert import AlertList, AlertOut
+
+logger = get_logger("unishield.api.alerts")
+
+router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
+
+
+@router.get("", response_model=AlertList)
+async def list_alerts(
+    limit: int = Query(50, ge=1, le=500),
+) -> AlertList:
+    """Live detection window (this engine session), not full DB history.
+
+    Persisted alerts remain available per-id for investigation and as an
+    audit log; the list endpoint only exposes what the engine has emitted
+    this session so flood-heavy history can't drown out newer, rarer threat
+    classes in the SOC views.
+    """
+    alerts = [_ctx_to_schema(ctx) for ctx in pipeline.alert_manager.recent(limit)]
+    return AlertList(total=len(alerts), alerts=alerts)
+
+
+@router.get("/live", response_model=AlertList)
+async def list_live_alerts(limit: int = Query(100, ge=1, le=1000)) -> AlertList:
+    alerts = [_ctx_to_schema(ctx) for ctx in pipeline.alert_manager.recent(limit)]
+    return AlertList(total=len(alerts), alerts=alerts)
+
+
+@router.get("/{alert_id}", response_model=AlertOut)
+async def get_alert(
+    alert_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> AlertOut:
+    repo = AlertRepository(session)
+    alert = await repo.get_by_id(alert_id)
+    if alert is not None:
+        return alert
+    # Persistence and the DB audit log can lag or be cleaned (test/dev data,
+    # DB resets) while the alert still lives in this engine session's memory.
+    # Fall back to the live context so a still-visible alert never 404s.
+    live = next(
+        (ctx for ctx in pipeline.alert_manager.recent() if ctx.alert_id == alert_id),
+        None,
+    )
+    if live is not None:
+        return _ctx_to_schema(live)
+    raise HTTPException(status_code=404, detail="Alert not found")
+
+
+@router.post("/{alert_id}/resolve")
+async def resolve_alert(
+    alert_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    repo = AlertRepository(session)
+    alert = await repo.mark_resolved(alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"ok": True, "status": alert.status, "alert_id": alert.alert_id}
+
+
+def _ctx_to_schema(ctx) -> AlertOut:
+    return AlertOut(
+        id=ctx.alert_id,
+        alert_id=ctx.alert_id,
+        timestamp=ctx.alert.timestamp,
+        src_ip=ctx.alert.src_ip,
+        dst_ip=ctx.alert.dst_ip,
+        protocol=ctx.alert.protocol,
+        threat_type=ctx.alert.threat_type,
+        severity=ctx.alert.severity,
+        confidence=ctx.alert.confidence,
+        risk_score=ctx.alert.risk_score,
+        evidence=ctx.alert.evidence,
+        detection_sources=ctx.alert.detection_sources,
+        pcap_path=ctx.pcap_path,
+        aggregation=ctx.alert.evidence.get("aggregation", {}),
+    )

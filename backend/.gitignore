@@ -1,0 +1,21 @@
+# Never commit env files (may carry secrets later)
+.env
+
+# Runtime artifacts — never committed
+unishield.db
+unishield.db-journal
+__pycache__/
+bench.db
+
+# Capture runtime output (live/incident pcaps are written as flows stream through)
+captures/active/
+captures/incidents/
+captures/archive/*.pcap
+
+# Trained model binaries (regenerate via scripts/train_models.py; only the
+# small JSON metadata under models/ is tracked)
+models/isolation_forest/
+models/preprocessing/scaler.pkl
+models/xgboost/
+models/*.joblib
+models/*.pkl
