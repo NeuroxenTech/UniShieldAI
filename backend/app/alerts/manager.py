@@ -34,12 +34,16 @@ class AlertManager:
         self._active: dict[tuple, AlertContext] = {}
         self._publish_callbacks: list[callable] = []
         self._persist_callbacks: list[callable] = []
+        self._notify_callbacks: list[callable] = []
 
     def register_publisher(self, callback: callable) -> None:
         self._publish_callbacks.append(callback)
 
     def register_persister(self, callback: callable) -> None:
         self._persist_callbacks.append(callback)
+
+    def register_notifier(self, callback: callable) -> None:
+        self._notify_callbacks.append(callback)
 
     def create_alert(self, decision, features, evidence: dict | None = None,
                      pcap_path: str | None = None) -> AlertContext | None:
@@ -74,6 +78,8 @@ class AlertManager:
         for callback in self._publish_callbacks:
             _call_async(callback, ctx)
         for callback in self._persist_callbacks:
+            _call_async(callback, ctx)
+        for callback in self._notify_callbacks:
             _call_async(callback, ctx)
 
         logger.info(

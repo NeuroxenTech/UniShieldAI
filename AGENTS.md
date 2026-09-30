@@ -59,6 +59,35 @@ pydantic, aiosqlite, pytest, pytest-asyncio, httpx).
   UTC — `parseApiTs` in `api.ts` appends `Z` so `timeAgo`/`formatTs` show real
   ages (`4h` bug was naive timestamps parsed as local). The Overview trend keeps
   24 × 5s samples (≈2 min) so the chart never gaps like the old 5-minute window.
+- **Mobile push (`backend/app/notifications/ntfy.py`)**: new alerts are pushed
+  to an ntfy.sh topic (`POST {NTFY_URL}/{NTFY_TOPIC}`, headers Title/Priority/
+  Tags, JSON body with src/dst/threat/risk). Wired via a THIRD `AlertManager`
+  hook, `register_notifier` (`alerts/manager.py`), which fires **only on
+  genuinely-new emissions — never on `_pulse` merges**, so a 30-fps flood can't
+  spam the phone. Priority maps severity→ntfy priority (critical=5 … info=1).
+  `ntfy.py` reads `alert.evidence["features"]["dst_port"]` (the raw `AlertCreate`
+  has NO port fields — `alerts/generator._feature_summary` was extended to
+  include src/dst_port); do not use `alert.dst_port` on `AlertCreate`.
+  Config lives in `backend/.env` (`NTFY_ENABLED=true`, `NTFY_URL`,
+  `NTFY_TOPIC=unishield-alerts-ps26145`); notifier is a no-op unless enabled AND
+  a topic is set. NOTE: `pydantic.BaseModel.__getattr__` RAISES
+  `AttributeError` for unknown fields, so `getattr(alert, "dst_port", None)`
+  DOES NOT fall back cleanly on model instances — use the evidence dict.
+- **Live feed pause/resume**: a TopBar pause button (Play/Pause icon) toggles
+  `POST /api/v1/engine/live {"enabled": bool}` (router `app/api/live.py`,
+  state `app/state/live.py` `LiveFeedController`, in-memory flag, lock-protected
+  setter). While paused the backend keeps ingesting + detecting + **persisting
+  alerts to the audit DB**, but `realtime/publisher._publish_all` early-returns
+  (metrics/engine_state streams frozen), `main._publish_alert` returns before
+  broadcasting, and `NtfyNotifier.notify` is gated too. The toggle itself
+  broadcasts a NON-gated `{type:"live_state"}` control envelope via
+  `publish_payload` so clients learn the new state (that envelope also lands on
+  `/ws/alerts`, which shares `connection_manager`). Frontend: `engine.ts`
+  stores `liveEnabled`, `toggleLiveFeed()` calls the API then `refreshAll()` on
+  resume; `useEngineSync` skips poll/tick/WS-frame handling while paused
+  (reading `useEngine.getState().liveEnabled` inside the callbacks to avoid
+  stale closures) and the `ConnectionBadge` flips to a PAUSED pill. Resume
+  re-polls and surfaces everything that was stored meanwhile.
 - Routes (6, `createBrowserRouter`): `/` Overview, `/alerts`, `/traffic`,
   `/engine`, `/about`, `/investigation/:id`. Sidebar lists these 5 pages
   (alerts item carries a live open-count badge) plus a collapse toggle.
